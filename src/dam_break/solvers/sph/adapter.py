@@ -240,11 +240,23 @@ def write_case_xml(
     return path
 
 
+def _tool_env(tool: Path) -> dict:
+    """Subprocess env: on Linux the DualSPHysics binaries need their bundled
+    shared libraries (libdsphchrono.so, libChronoEngine.so) on
+    LD_LIBRARY_PATH — they live in the same bin directory as the tool."""
+    env = os.environ.copy()
+    if platform.system() != "Windows":
+        bindir = str(tool.parent)
+        env["LD_LIBRARY_PATH"] = bindir + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+    return env
+
+
 def run_gencase(case_dir: Path, name: str, gencase: Path, timeout: int = 600) -> tuple[bool, str]:
     """Run GenCase: XML -> .bi4 (+ sanity VTKs). Returns (ok, log tail)."""
     proc = subprocess.run(
         [str(gencase), f"{name}_Def", f"{name}_out/{name}", "-save:all"],
         cwd=str(case_dir), capture_output=True, text=True, timeout=timeout,
+        env=_tool_env(gencase),
     )
     log = (proc.stdout or "") + (proc.stderr or "")
     return proc.returncode == 0, log[-4000:]
@@ -257,7 +269,7 @@ def run_solver(case_dir: Path, name: str, solver: Path, gpu: int | None = None,
         args[1:1] = ["-gpu", str(gpu)]
     proc = subprocess.run(
         args, cwd=str(case_dir), capture_output=True, text=True,
-        timeout=timeout if timeout > 0 else None,
+        timeout=timeout if timeout > 0 else None, env=_tool_env(solver),
     )
     log = (proc.stdout or "") + (proc.stderr or "")
     return proc.returncode == 0, log[-4000:]
@@ -276,6 +288,7 @@ def run_partvtk(case_dir: Path, name: str, partvtk: Path, timeout: int = 600) ->
          "-savevtk", f"{name}_out/particles/PartFluid",
          "-onlytype:-all,+fluid"],
         cwd=str(case_dir), capture_output=True, text=True, timeout=timeout,
+        env=_tool_env(partvtk),
     )
     log = (proc.stdout or "") + (proc.stderr or "")
     return proc.returncode == 0, log[-2000:]
