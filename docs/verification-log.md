@@ -40,9 +40,16 @@ original papers before publication:
 
 ## External tools
 
-- DualSPHysics on Colab: clone-without-compile reported to work (forum);
-  compiling from source hit `libdsphchrono.so` issues — **TODO** reproduce on
-  a T4 and record the exact working recipe.
+- DualSPHysics v5.4 (clone verified 2026-09-28): the repo ships GenCase +
+  post tools for Windows AND Linux, but NOT the solver — that needs the full
+  package (dual.sphysics.org, registration form) or compiling `src/`.
+  GenCase accepted our real-terrain STL case (Machhu near-field, dp=4 m:
+  78,078 fluid / 32,702 boundary). Notes: the native `drawbathymetry`/
+  zpoints route SEGFAULTS GenCase — use `drawfilestl` with local coordinates;
+  GenCase VTKs are binary, particle counts come from the `.out` text.
+  **TODO**: compile or install the solver on Colab, pin the PartVTK
+  `-savecsv` column layout, run the standard dambreak benchmark convergence
+  study.
 - Delft3D FM: model builder verified against hydrolib-core 1.4.0 + meshkernel
   (24 tests). Executing needs the `dflowfm` binary — **TODO** verify the
   Colab recipe (`condacolab` + `mamba install -c deltares delft3dfm`) and the

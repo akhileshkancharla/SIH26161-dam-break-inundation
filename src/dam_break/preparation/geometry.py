@@ -1,4 +1,4 @@
-"""DEM patch -> STL surface for particle-based (SPH) near-field models."""
+"""DEM patch exports for particle-based (SPH) near-field models."""
 
 from __future__ import annotations
 
@@ -6,6 +6,28 @@ import struct
 from pathlib import Path
 
 import numpy as np
+
+
+def dem_to_xyz(
+    z: np.ndarray,
+    transform,
+    out_path: str | Path,
+    target_spacing_m: float = 2.0,
+) -> Path:
+    """Write scattered XYZ samples ("x y z" per line) decimated to roughly
+    the target spacing — the format DualSPHysics ``zpoints`` ingests."""
+    cell = abs(transform.a)
+    step = max(1, int(round(target_spacing_m / cell))) if cell > 0 else 1
+    zz = z[::step, ::step]
+    rows, cols = np.indices(zz.shape)
+    xs = transform.c + (cols * step + 0.5) * transform.a
+    ys = transform.f + (rows * step + 0.5) * transform.e
+    pts = np.column_stack([xs.ravel(), ys.ravel(), zz.ravel()])
+    pts = pts[np.isfinite(pts[:, 2])]
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    np.savetxt(out_path, pts, fmt="%.2f %.2f %.3f")
+    return out_path
 
 
 def dem_to_stl(

@@ -116,9 +116,17 @@ tests/                            pytest suite (offline)
   `dflowfm` binary (Linux/WSL/Colab via conda — see the notebook's Optional C;
   `DFLOWFM_BIN` env var). Mesh spacing via `terrain.mesh_resolution_m`
   (default 60 m; ~392k cells for the Machhu corridor).
-- **dualsphysics** — adapter clips the near-field DEM, writes terrain STL +
-  v5-style `Case_def.xml`; execution driver on GPU (Colab T4 / local NVIDIA)
-  is milestone 3. `DUALSPHYSICS_ROOT` points at the DualSPHysics checkout.
+- **dualsphysics** — real v5.4 XML case generation (validated by running
+  GenCase on synthetic AND real Machhu terrain: 78k fluid / 33k boundary
+  particles at dp=4 m for a 1.2 km near-field). Terrain enters as STL in
+  local coordinates (UTM offsets break float32 precision); reservoir is a
+  fillbox; the dam body is omitted (instantaneous full breach — progressive
+  breaching is D-Flow FM's dambreak structure). The full driver runs
+  GenCase -> solver -> PartVTK -> binned depth raster when binaries exist.
+  The public clone ships GenCase + post tools; the **solver** comes from the
+  full package (dual.sphysics.org, registration) or compiling `src/` on
+  Linux. Env vars: `DUALSPHYSICS_ROOT`, `DUALSPHYSICS_GENCASE`,
+  `DUALSPHYSICS_SOLVER`, `DUALSPHYSICS_PARTVTK`.
 
 ## Data sources & attribution
 
@@ -143,7 +151,7 @@ python scripts/make_colab_notebook.py   # regenerate the Colab notebook
 
 1. ✅ Data pipeline + DEM ingestion + dam registry + breach module + screening
 2. ◐ Delft3D FM: model builder done; execution + validation run pending the binary
-3. ⏳ DualSPHysics execution driver + standard dambreak benchmark convergence
+3. ◐ DualSPHysics: v5.4 case generation + GenCase validation done; solver execution + benchmark convergence pending the solver binary
 4. ⏳ Solver comparison (arrival/peak/extent CSI) + depth-damage loss analysis
 5. ⏳ GEE near-real-time watchlist (scheduled Sentinel-1 re-checks)
 6. ⏳ Dashboard polish: results map with time slider, scenario library, PDF report

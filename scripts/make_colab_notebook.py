@@ -169,49 +169,53 @@ Map.addLayer(after, {'min': -25, 'max': 5}, 'S1 VV after')
 Map.addLayer(mask.selfMask(), {'palette': ['red']}, 'flood')
 Map""")
 
-md("""## Optional B — DualSPHysics near-field case on the T4 GPU
+md("""## Optional B — DualSPHysics near-field case (GPU runtime)
 
-The SPH solver covers the near-field reach only (dam + first km). This cell
-clones the DualSPHysics repository (a prebuilt Linux tree; compiling from
-source on Colab is fragile) and runs a small standard dam-break benchmark to
-verify the toolchain. Our adapter (`dam_break.solvers.sph`) writes the case
-files for real-terrain runs — see the repo README, milestone 3.""")
+The SPH solver covers the near-field reach only (dam + first ~1 km). Our
+adapter writes a real-terrain case (STL terrain in local coordinates +
+reservoir box, v5.4 XML schema) and validates it with **GenCase**, which
+the public DualSPHysics clone ships. Verified: GenCase accepts our
+Machhu-II near-field case (78k fluid / 33k boundary particles at dp=4 m).
 
-code("""# Clone DualSPHysics and locate the Linux binaries (T4 GPU runtime)
+The **solver binary is not in the clone** — it comes from the full package
+(dual.sphysics.org, free but registration) or by compiling `src/` on this
+Linux runtime. After that, the same `run_sph` call simulates and bins
+particles to a depth raster automatically.""")
+
+code("""# Clone DualSPHysics (ships GenCase + post tools, incl. Linux binaries)
 ![ -d DualSPHysics ] || git clone --depth 1 https://github.com/DualSPHysics/DualSPHysics.git
-import os, shutil
+import os
 from pathlib import Path
-
-dsp = Path('DualSPHysics')
-bins = [p for p in dsp.rglob('*') if p.is_file() and 'linux' in str(p.parent).lower()]
-print(f'{len(bins)} linux binaries found')
-print('set DAM_BREAK env:' , os.environ.get('DUALSPHYSICS_ROOT', '(not set)'))
-if dsp.exists():
-    os.environ['DUALSPHYSICS_ROOT'] = str(dsp.resolve())
-    print('DUALSPHYSICS_ROOT =', os.environ['DUALSPHYSICS_ROOT'])
+os.environ['DUALSPHYSICS_ROOT'] = str(Path('DualSPHysics').resolve())
 !nvidia-smi -L 2>/dev/null || echo 'no GPU runtime'""")
 
-code("""# Generate our near-field case files for the selected dam and inspect them
-from dam_break.pipeline import run_pipeline  # noqa: F401 (already run above)
-from dam_break.solvers.sph import run_sph
-from dam_break.ingestion.dem import fetch_dem, DEMData
+code("""# Build + validate the near-field case for the selected dam (self-contained)
+import numpy as np
+import rasterio.warp
 from dam_break.config import load_scenario
+from dam_break.ingestion.dem import fetch_dem
 from dam_break.breach import breach_parameters
-import rasterio.warp, numpy as np
+from dam_break.pipeline import _bbox_around, _dam_rowcol, _clip_to_corridor
+from dam_break.solvers.sph import run_sph, find_tools
 
 sc = load_scenario(cfg)
-bbox = (sc.dam.lon - 0.2, sc.dam.lat - 0.2, sc.dam.lon + 0.2, sc.dam.lat + 0.2)
+bbox = _bbox_around(sc.dam.lat, sc.dam.lon, 0.15)   # small window is enough
 dem = fetch_dem(sc.terrain, bbox)
-xs, ys = rasterio.warp.transform('EPSG:4326', dem.crs, [sc.dam.lon], [sc.dam.lat])
-inv = ~dem.transform
-col, row = inv * (xs[0], ys[0])
-rc = (int(np.clip(row, 0, dem.shape[0]-1)), int(np.clip(col, 0, dem.shape[1]-1)))
+rc = _dam_rowcol(dem, sc.dam.lat, sc.dam.lon)
 
 breach = breach_parameters(
     mode=sc.breach.mode, case=sc.breach.case, storage_m3=sc.dam.storage_m3,
     release_fraction=sc.breach.release_fraction, dam_height_m=sc.dam.height_m)
-res = run_sph(dem, rc, breach, Path('outputs/sph_case'))
-print('\\n'.join(res.notes))""")
+
+res = run_sph(dem, rc, breach, Path('outputs/sph_case'),
+              dp=4.0, nearfield_length_m=1200)
+print(res.diagnostics)
+print('\\n'.join(res.notes))
+
+# Once the solver is available:
+#   os.environ['DUALSPHYSICS_SOLVER'] = '/path/to/DualSPHysics5.4_linux64'
+# rerun the run_sph(...) call — it will simulate (GPU if the build supports
+# it), extract particles via PartVTK and return a georeferenced depth raster.""")
 
 md("""## Optional C — Delft3D FM regional model (CPU, experimental)
 
