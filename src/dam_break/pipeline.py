@@ -183,7 +183,9 @@ def run_pipeline(scenario: Scenario | str | Path | dict, out_root: str | Path | 
             )
         elif solver == "dualsphysics":
             from .solvers.sph.adapter import run_sph
-            results[solver] = run_sph(dem, dam_rc, breach, run_dir)
+            results[solver] = run_sph(
+                dem, dam_rc, breach, run_dir,
+                timemax_s=scenario.run.sph_timemax_s)
         for note in results[solver].notes:
             log(f"  note: {note}")
 

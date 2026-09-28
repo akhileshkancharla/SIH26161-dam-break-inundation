@@ -98,6 +98,7 @@ class RunSpec:
     duration_h: float = 24.0
     dt_s: float = 60.0
     attenuation_km: float | None = None  # exponential volume loss length scale
+    sph_timemax_s: float | None = None   # SPH simulated horizon (default: capped 300 s)
 
 
 @dataclass
@@ -217,6 +218,9 @@ def load_scenario(source: str | Path | dict[str, Any]) -> Scenario:
         dt_s=float(run_cfg.get("dt_s", 60.0)),
         attenuation_km=(
             float(run_cfg["attenuation_km"]) if run_cfg.get("attenuation_km") is not None else None
+        ),
+        sph_timemax_s=(
+            float(run_cfg["sph_timemax_s"]) if run_cfg.get("sph_timemax_s") is not None else None
         ),
     )
 

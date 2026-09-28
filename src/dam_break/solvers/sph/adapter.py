@@ -417,6 +417,12 @@ def run_sph(
     water_y0 = 0.05 * ly
     water_y1 = 0.95 * ly
 
+    # Simulated horizon: the flood front crosses a 1-2 km near-field in
+    # ~1-3 minutes of simulated time; hours-long horizons (e.g. 3x the
+    # breach failure time) turn into millions of time steps and run for
+    # days. Override with run.sph_timemax_s if a longer window is needed.
+    horizon = timemax_s if timemax_s else max(min(breach.failure_time_s * 3, 300.0), 30.0)
+
     xml = write_case_xml(
         run_dir,
         dp=dp,
@@ -426,8 +432,8 @@ def run_sph(
         stl_file="terrain.stl",
         water_point=(water_x0, water_y0, zmin),
         water_size=(water_x1 - water_x0, water_y1 - water_y0, pool_z - zmin),
-        timemax_s=timemax_s if timemax_s else max(breach.failure_time_s * 3, 30.0),
-        timeout_s=max((timemax_s if timemax_s else 30.0) / 20.0, 1.0),
+        timemax_s=horizon,
+        timeout_s=max(horizon / 20.0, 1.0),
     )
 
     notes = [
