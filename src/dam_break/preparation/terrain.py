@@ -15,6 +15,36 @@ def utm_crs_for(lat: float, lon: float) -> CRS:
     return CRS.from_epsg(32700 + zone if south else 32600 + zone)
 
 
+def snap_to_thalweg(
+    z: np.ndarray,
+    row: int,
+    col: int,
+    transform,
+    search_radius_m: float = 500.0,
+) -> tuple[int, int, float]:
+    """Move a dam cell to the lowest DEM cell within a search radius.
+
+    Registry dam coordinates can land on a valley side (the Machhu-II demo
+    coordinate sits ~380 m off the thalweg); every solver assumes the dam
+    is at the river, so snapping fixes routing consistently. Returns
+    (row, col, offset_m).
+    """
+    cell = float(np.hypot(transform.a, transform.b))
+    rad = max(1, int(search_radius_m / cell))
+    r0, r1 = max(row - rad, 0), min(row + rad + 1, z.shape[0])
+    c0, c1 = max(col - rad, 0), min(col + rad + 1, z.shape[1])
+    window = z[r0:r1, c0:c1]
+    if not np.isfinite(window).any():
+        return row, col, 0.0
+    i, j = np.unravel_index(np.nanargmin(window), window.shape)
+    new_r, new_c = r0 + i, c0 + j
+    # Only move when it actually descends (ties across a flat channel stay put).
+    if not (z[new_r, new_c] < z[row, col] - 1e-6):
+        return row, col, 0.0
+    offset = float(np.hypot(new_r - row, new_c - col) * cell)
+    return new_r, new_c, offset
+
+
 def priority_flood_fill(z: np.ndarray, epsilon: float = 1e-6) -> np.ndarray:
     """Depression-filled DEM (Barnes et al. priority-flood, epsilon variant).
 

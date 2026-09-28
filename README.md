@@ -38,6 +38,7 @@ streamlit run dashboard/app.py
 
 ```
 scenario JSON ─► dam registry lookup ─► DEM ingest (AWS terrarium / GEE GLO30 / file)
+                     └► snap dam to local thalweg (registry coords can sit on a valley side)
         │                                        │
         ▼                                        ▼
   breach module                          terrain prep: UTM, depression fill,
@@ -92,8 +93,9 @@ src/dam_break/
   preparation/     UTM reprojection, priority-flood fill, flow-path trace,
                    roughness mapping, DEM→STL for SPH
   solvers/         screening (volume-fill), delft3d adapter, sph adapter
-  postprocess/     COG rasters, depth polygons, SHP/KML exports, CSI/F1 metrics
-  exposure/        land-cover exposure overlay
+  postprocess/     COG rasters, depth polygons, SHP/KML exports, CSI/F1 metrics,
+                   cross-solver raster comparison (alignment + overlap maps)
+  exposure/        land-cover exposure overlay + indicative depth-damage loss
   satellite/       Sentinel-1 GEE flood mapping (UN-SPIDER practice)
   pipeline.py      end-to-end orchestration
 scripts/run_pipeline.py           CLI entry point
@@ -154,6 +156,8 @@ python scripts/make_colab_notebook.py   # regenerate the Colab notebook
 3. ◐ DualSPHysics: case generation + full CPU execution chain verified
    (GenCase -> solver -> PartVTK -> depth raster on the Machhu near-field);
    GPU runs at finer dp + benchmark convergence pending
-4. ⏳ Solver comparison (arrival/peak/extent CSI) + depth-damage loss analysis
+4. ◐ Solver comparison (CSI/POD/FAR + depth bias + overlap maps) and
+   depth-damage loss machinery done; physics reconciliation across solvers
+   (consistent near-field volume, finer dp) pending
 5. ⏳ GEE near-real-time watchlist (scheduled Sentinel-1 re-checks)
 6. ⏳ Dashboard polish: results map with time slider, scenario library, PDF report

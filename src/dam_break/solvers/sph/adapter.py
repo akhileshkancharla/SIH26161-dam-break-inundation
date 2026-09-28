@@ -391,12 +391,16 @@ def run_sph(
     # Reservoir box side faces in array indices (row 0 == local y = ly).
     row_top, row_bot = int(0.05 * ly_), min(int(0.95 * ly_), ly_ - 1)
     c0b, c1b = int(0.05 * lx_), min(int(RESERVOIR_FRACTION * lx_) + 1, lx_)
-    rim = float(np.nanmin(np.concatenate([
-        z[row_top, c0b:c1b], z[row_bot, c0b:c1b],
-    ])))
+    edges = np.concatenate([z[row_top, c0b:c1b], z[row_bot, c0b:c1b]])
+    # Walls dominate the box edges; the channel is a minority, so a
+    # percentile (not the minimum) estimates the containing rim.
+    rim = float(np.nanpercentile(edges, 60))
     pool_z = min(pool_requested, rim - 1.0)
-    if pool_z <= zmin:
-        raise RuntimeError("computed pool level is below the terrain minimum")
+    if pool_z <= zmin + 0.5 * dp:
+        raise RuntimeError(
+            "reservoir cannot be held within this near-field window (pool "
+            f"{pool_z:.1f} m vs terrain minimum {zmin:.1f} m); widen "
+            "nearfield_length_m or lower the dam height")
 
     # SPH works in local coordinates: large UTM values exhaust float32
     # precision at a few-metre dp, so the patch is shifted to (0, 0) and the

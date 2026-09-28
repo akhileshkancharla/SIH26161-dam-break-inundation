@@ -90,11 +90,21 @@ def run_pipeline(scenario: Scenario | str | Path | dict, out_root: str | Path | 
     bbox = _bbox_around(dam.lat, dam.lon, fetch_deg)
     log(f"fetching DEM ({scenario.terrain.dem}) over bbox {bbox}")
     dem = fetch_dem(scenario.terrain, bbox)
-    dem_rc = _dam_rowcol(dem, dam.lat, dam.lon)
-    dem, dam_rc = _clip_to_corridor(dem, dem_rc, length_km, scenario.terrain.corridor_width_km)
+    dam_rc = _dam_rowcol(dem, dam.lat, dam.lon)
+    dem, dam_rc = _clip_to_corridor(dem, dam_rc, length_km, scenario.terrain.corridor_width_km)
     log(f"DEM grid {dem.shape} @ {abs(dem.transform.a):.0f} m ({dem.source})")
     if np.isnan(dem.z).all():
         raise RuntimeError("DEM came back empty; check dam coordinates")
+
+    # Snap the dam to the local thalweg: registry coordinates can sit on a
+    # valley side (Machhu-II is ~380 m off), which dries out the dam cell in
+    # every solver. Applies consistently to all downstream computations.
+    from .preparation.terrain import snap_to_thalweg
+    snap_r, snap_c, dam_snap_m = snap_to_thalweg(
+        dem.z, dam_rc[0], dam_rc[1], dem.transform)
+    if dam_snap_m > abs(dem.transform.a):
+        dam_rc = (snap_r, snap_c)
+        log(f"dam snapped to thalweg: {dam_snap_m:.0f} m from registry coordinate")
 
     # --- land cover / roughness -----------------------------------------------
     landcover = None
@@ -223,7 +233,36 @@ def run_pipeline(scenario: Scenario | str | Path | dict, out_root: str | Path | 
         else:
             summaries[name] = {"diagnostics": res.diagnostics, "notes": res.notes}
 
-    # --- exposure ---------------------------------------------------------------
+    # --- solver comparison (milestone 4) -----------------------------------------
+    comparison: dict[str, Any] | None = None
+    depth_layers = {name: res.layers["depth_max"]
+                    for name, res in results.items() if "depth_max" in res.layers}
+    ref_name = "screening" if "screening" in depth_layers else next(iter(depth_layers), None)
+    if ref_name is not None and len(depth_layers) > 1:
+        from .postprocess.comparison import RasterField, compare_depth, comparison_map
+        ref_layer = depth_layers[ref_name]
+        comparison = {}
+        for name, layer in depth_layers.items():
+            if name == ref_name:
+                continue
+            result = compare_depth(
+                RasterField(ref_layer.array, ref_layer.transform, ref_layer.crs, ref_name),
+                RasterField(layer.array, layer.transform, layer.crs, name),
+            )
+            comparison[f"{name}_vs_{ref_name}"] = result
+            fig = comparison_map(
+                RasterField(ref_layer.array, ref_layer.transform, ref_layer.crs, ref_name),
+                RasterField(layer.array, layer.transform, layer.crs, name),
+                run_dir / f"comparison_{name}_vs_{ref_name}.png",
+                title=f"Flood extent: {name} vs {ref_name} (>0.5 m)",
+            )
+            if fig:
+                comparison[f"{name}_vs_{ref_name}"]["map"] = str(fig)
+        with open(run_dir / "comparison.json", "w", encoding="utf-8") as fh:
+            json.dump(comparison, fh, indent=2, default=str)
+        log(f"comparison written for: {list(comparison)}")
+
+    # --- exposure ----------------------------------------------------------------
     exposure = None
     if landcover is not None and "screening" in results:
         from .exposure import exposure_from_landcover, zonal_depth_by_class
@@ -233,12 +272,18 @@ def run_pipeline(scenario: Scenario | str | Path | dict, out_root: str | Path | 
                 depth > 0.1, landcover, dem.transform, abs(dem.transform.a) ** 2),
             "mean_depth_by_class_m": zonal_depth_by_class(depth, landcover, dem.transform),
         }
+        from .exposure.damage import loss_from_landcover
+        exposure["loss"] = loss_from_landcover(
+            depth, landcover, abs(dem.transform.a) ** 2)
         if "csv" in scenario.exports:
             import pandas as pd
             pd.DataFrame(
                 [{"class": k, "area_ha": v["area_ha"]}
                  for k, v in exposure["landcover_area"].items() if isinstance(v, dict)]
             ).to_csv(run_dir / "screening" / "exposure.csv", index=False)
+            pd.DataFrame(
+                [{"class": k, **v} for k, v in exposure["loss"]["by_class"].items()]
+            ).to_csv(run_dir / "screening" / "loss.csv", index=False)
 
     # --- summary -----------------------------------------------------------------
     summary = {
@@ -254,12 +299,14 @@ def run_pipeline(scenario: Scenario | str | Path | dict, out_root: str | Path | 
                    "breach_width_m": breach.breach_width_m,
                    "volume_m3": volume},
         "solvers": summaries,
+        "comparison": comparison,
         "exposure": exposure,
         "exports": exports_written,
         "runtime_s": round(time.time() - t0, 1),
         "caveats": [
             "screening solver outputs are indicative, not hydrodynamic results",
             "dam registry attributes are demo-grade until verified against NRLD/GeoDAR",
+            "loss figures are indicative: starter damage curves and asset values",
         ],
     }
     with open(run_dir / "summary.json", "w", encoding="utf-8") as fh:

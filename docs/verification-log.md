@@ -15,7 +15,7 @@ descriptions and must be snapped to the actual structure where marked.
 | --- | --- | --- |
 | South Lhonak Lake | coords ✅ 27.9144 N, 88.1836 E (Wikipedia, 27°54′51.95″N 88°11′00.91″E) | lake volume estimate ~58–65 Mm³ (Sattar et al. 2021 / ISRO) — **TODO** pin one source and cite it consistently |
 | Teesta III dam | coords ~ ✅ 27.585 N, 88.772 E (27°35′N 88°46′E, Mongabay/ADB reports) | height/storage **TODO** vs NRLD (run-of-river, small storage) |
-| Machhu-II | coords **TODO** 22.810 N, 70.902 E approx, ~5 km E of Morbi — snap to reservoir | height 25.6 m / length 3,571 m / storage 99.2 Mm³ quoted from memory — **TODO** vs NRLD; breach-history numbers (peak outflow, warning time) **TODO** vs CWC/account papers |
+| Machhu-II | coords 22.810 N, 70.902 E measured **~550-570 m off the thalweg** (sits on the valley side); the pipeline now auto-snaps to the local thalweg (see preparation.terrain.snap_to_thalweg) — still **TODO**: snap to the actual dam structure | height 25.6 m / length 3,571 m / storage 99.2 Mm³ quoted from memory — **TODO** vs NRLD; breach-history numbers (peak outflow, warning time) **TODO** vs CWC/account papers |
 | Tehri, Bhakra, Sardar Sarovar, Hirakud, Nagarjuna Sagar, Idukki, Mettur, Ukai, Rihand, Maithon, Panchet | **TODO** all attributes | heights/storages from memory; coordinates ±1 km |
 
 ## Breach relations (`src/dam_break/breach/empirical.py`)
@@ -75,3 +75,23 @@ original papers before publication:
   the Machhu case (~392k cells @ 60 m).
 - Dambreak structure starter values (f1=f2=1, uCrit=0.5 m/s, algorithm 2
   Verheij–van der Knaap) — **TODO** calibrate against literature/test cases.
+
+## Depth-damage curves (exposure/damage.py)
+
+Starter piecewise curves and INR/m2 asset values assembled from background
+knowledge of JRC-style functions (Huizinga et al. 2017) — shape and order of
+magnitude only. **TODO**: replace knots and asset values with the actual JRC
+report tables and Indian regional sources (NDMA / state disaster authorities)
+before quoting any loss figure. Overrides via
+`configs/datasets/damage_params.json`.
+
+## Cross-solver comparison caveats (postprocess/comparison.py)
+
+First real comparison (Machhu near-field, SPH dp=6 vs snapped screening,
+0.30 km2 overlap): CSI 0.07, POD 0.41, FAR 0.92, SPH depth bias +12.7 m.
+Known drivers, to reconcile before reading as model error: the corridor
+screening spreads the breach volume over 30 km (little water near the dam)
+while SPH holds its whole release in the 800 m window; SPH depth comes from
+particle-count x dp (quantised, inflated at dp=6); the SPH pool is
+rim-clamped (percentile-based rim) to ~72 m vs the 94.8 m requested. The
+metrics themselves are unit-tested (perfect/disjoint/aligned-grid cases).
