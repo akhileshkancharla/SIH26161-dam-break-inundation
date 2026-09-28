@@ -1,0 +1,36 @@
+{
+  "scenario_id": "teesta_south_lhonak_2023",
+  "description": "Screening replay of the 4 Oct 2023 South Lhonak GLOF (Sikkim). The breach source is the moraine-dammed glacial lake, not an engineered dam; volume uses the ~58-65 Mm3 pre-event estimates (Sattar et al. 2021 / ISRO). Steep Himalayan terrain: treat 30 m DEM results as indicative only; the near-field is a DualSPHysics use case.",
+  "dam": {
+    "name": "South Lhonak Lake",
+    "override": {
+      "type": "moraine_glacial_lake",
+      "height_m": 60,
+      "storage_mcm": 60
+    }
+  },
+  "terrain": {
+    "dem": "aws_terrarium",
+    "zoom": 12,
+    "corridor_length_km": 55,
+    "corridor_width_km": 3,
+    "resolution_m": 30
+  },
+  "roughness": {
+    "landcover": "none",
+    "default_n": 0.08
+  },
+  "breach": {
+    "mode": "overtopping",
+    "method": "froehlich_2008",
+    "case": "expected",
+    "release_fraction": 0.75
+  },
+  "solvers": ["screening"],
+  "run": {
+    "duration_h": 6,
+    "dt_s": 30,
+    "attenuation_km": 40
+  },
+  "exports": ["shp", "kml", "gpkg", "tif", "csv"]
+}

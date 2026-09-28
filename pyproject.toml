@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dam-break-inundation"
+version = "0.1.0"
+description = "SIH 26161: dam-break inundation modelling framework (breach, screening, Delft3D FM / SPH adapters, satellite flood mapping)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "numpy",
+    "scipy",
+    "pandas",
+    "rasterio",
+    "geopandas",
+    "shapely",
+    "pyproj",
+    "matplotlib",
+    "simplekml",
+    "pillow",
+    "requests",
+]
+
+[project.optional-dependencies]
+gee = ["earthengine-api"]
+delft3d = ["hydrolib-core"]
+sph = ["numpy-stl"]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
