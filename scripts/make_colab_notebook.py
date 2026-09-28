@@ -40,9 +40,16 @@ code(f"""# Clone the repository (skipped if it already exists, e.g. after a reco
 %cd SIH26161-dam-break-inundation
 !git pull --quiet 2>/dev/null || true
 
-# Install the package (runtime restart is NOT needed)
-%pip install -q -e .
+# Install dependencies + the package.
+# NOT editable (-e): editable installs register their path via a .pth file
+# that the already-running Colab kernel ignores (it is only read at
+# interpreter startup), so `import dam_break` would fail without a restart.
+# A regular install puts the package in site-packages and imports at once.
+%pip install -q .
 
+import os, sys
+if os.path.isdir('src'):
+    sys.path.insert(0, 'src')   # prefer the repo checkout over the installed copy
 import dam_break
 print('dam_break version:', dam_break.__version__)""")
 
