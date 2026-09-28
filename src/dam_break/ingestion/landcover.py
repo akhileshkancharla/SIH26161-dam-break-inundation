@@ -14,7 +14,9 @@ from .dem import DEMData
 def fetch_worldcover_gee(dem: DEMData, timeout: int = 120) -> np.ndarray:
     """WorldCover classes resampled onto the DEM's grid (nearest neighbour).
 
-    Returns ``None``-free class codes; cells outside coverage get 0.
+    Requested at the DEM's own resolution: at native 10 m a corridor-sized
+    tile exceeds GEE's ~50 MB GeoTIFF download cap. Returns ``None``-free
+    class codes; cells outside coverage get 0.
     """
     try:
         import ee
@@ -29,8 +31,9 @@ def fetch_worldcover_gee(dem: DEMData, timeout: int = 120) -> np.ndarray:
         .select("Map")
         .clip(region)
     )
+    scale = float(abs(dem.transform.a)) or 30.0
     url = image.getDownloadURL(
-        {"format": "GEO_TIFF", "region": region, "scale": 10, "crs": "EPSG:4326"}
+        {"format": "GEO_TIFF", "region": region, "scale": scale, "crs": "EPSG:4326"}
     )
     resp = requests.get(url, timeout=timeout)
     resp.raise_for_status()
