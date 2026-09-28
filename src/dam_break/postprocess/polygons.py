@@ -81,7 +81,12 @@ def export_shp(gdf: gpd.GeoDataFrame, path: str | Path) -> Path:
 
 
 def export_kml(gdf: gpd.GeoDataFrame, path: str | Path, name: str = "inundation") -> Path:
-    """KML coloured by depth class (simplekml; expects WGS84 input gdf)."""
+    """KML coloured by depth class (simplekml; expects WGS84 input gdf).
+
+    Boundaries are set via simplekml's outerboundaryis API — assigning a
+    shapely ``__geo_interface__`` to ``pol.geometry`` silently writes
+    degenerate 0,0 rings.
+    """
     import simplekml
 
     path = Path(path)
@@ -90,15 +95,22 @@ def export_kml(gdf: gpd.GeoDataFrame, path: str | Path, name: str = "inundation"
     kml.document.name = name
     for _, row in gdf.iterrows():
         idx = _class_index(row.get("dclass"))
-        pol = kml.newpolygon(name=str(row.get("dclass", "flood")))
-        pol.geometry = row.geometry.__geo_interface__
         color = f"ff{CLASS_COLORS[idx]}"
-        pol.style.polystyle.color = color
-        pol.style.linestyle.color = color
-        pol.style.polystyle.outline = 1
-        for field in ("dclass", "maxdepth", "area_ha", "dlo_m", "dhi_m"):
-            if field in row:
-                pol.extendeddata.newdata(name=field, value=str(row[field]))
+        geom = row.geometry
+        parts = list(geom.geoms) if geom.geom_type == "MultiPolygon" else [geom]
+        for part in parts:
+            if part.is_empty or part.exterior is None:
+                continue
+            pol = kml.newpolygon(name=str(row.get("dclass", "flood")))
+            pol.outerboundaryis = [(x, y) for x, y in part.exterior.coords]
+            if part.interiors:
+                pol.innerboundaryis = [(x, y) for x, y in part.interiors[0].coords]
+            pol.style.polystyle.color = color
+            pol.style.linestyle.color = color
+            pol.style.polystyle.outline = 1
+            for field in ("dclass", "maxdepth", "area_ha", "dlo_m", "dhi_m"):
+                if field in row:
+                    pol.extendeddata.newdata(name=field, value=str(row[field]))
     kml.save(path)
     return path
 

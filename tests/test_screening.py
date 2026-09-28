@@ -102,3 +102,22 @@ def test_roughness_mapping():
     assert n[0, 1] == pytest.approx(0.04)
     assert n[1, 0] == pytest.approx(0.03)
     assert n[1, 1] == pytest.approx(0.06)
+
+
+def test_kml_has_real_coordinates(tmp_path):
+    """Regression: pol.geometry assignment wrote degenerate 0,0 rings."""
+    import geopandas as gpd
+    from shapely.geometry import Polygon
+    from dam_break.postprocess.polygons import export_kml
+
+    gdf = gpd.GeoDataFrame(
+        {"dclass": ["1-2 m"], "maxdepth": [1.5], "area_ha": [10.0],
+         "dlo_m": [1.0], "dhi_m": [2.0]},
+        geometry=[Polygon([(70.90, 22.81), (70.91, 22.81),
+                           (70.91, 22.82), (70.90, 22.82)])],
+        crs="EPSG:4326",
+    )
+    out = export_kml(gdf, tmp_path / "t.kml")
+    text = out.read_text()
+    assert "<coordinates>70.9" in text
+    assert "0.0, 0.0, 0.0" not in text
