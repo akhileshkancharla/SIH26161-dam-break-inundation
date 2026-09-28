@@ -131,6 +131,66 @@ for pattern in ('*.shp.zip', '*.kml'):
     for f in (run_dir / 'screening').glob(pattern):
         files.download(str(f))""")
 
+md("""## Full run: both solvers + exposure + loss + comparison (milestone 4)
+
+One pipeline call with `solvers=["screening", "dualsphysics"]` and
+`roughness.landcover="worldcover_gee"` produces: the corridor screening
+raster, the near-field SPH raster, the automatic cross-solver comparison
+(CSI/POD/FAR + depth bias + overlap map) and the land-cover exposure with
+indicative depth-damage loss. Needs Earth Engine auth (WorldCover) and,
+for the SPH half, the DualSPHysics package from Optional B's first cell.""")
+
+code("""# 1) Earth Engine (WorldCover land cover + roughness)
+%pip install -q earthengine-api
+import ee
+PROJECT = 'your-ee-project-id'   # <- your Google Cloud project registered with GEE
+try:
+    ee.Initialize(project=PROJECT)
+except Exception:
+    ee.Authenticate()
+    ee.Initialize(project=PROJECT)
+print('ee ok')""")
+
+code("""# 2) Run screening + SPH with land-cover exposure in one go
+#    (run Optional B cell 1 first if you want the SPH half to simulate)
+import json
+from pathlib import Path
+from dam_break.config import load_scenario
+from dam_break.pipeline import run_pipeline
+
+cfg = json.loads(Path(f'configs/scenarios/{SCENARIO}.json').read_text())
+cfg['roughness'] = {'landcover': 'worldcover_gee', 'default_n': 0.05}
+cfg['solvers'] = ['screening', 'dualsphysics']
+summary4 = run_pipeline(load_scenario(cfg), out_root='outputs')""")
+
+code("""# 3) Comparison + loss tables
+import json
+import pandas as pd
+from IPython.display import Image, display
+from pathlib import Path
+
+run4 = Path(summary4['run_dir'])
+print('== cross-solver comparison ==')
+print(json.dumps(summary4.get('comparison'), indent=1, default=str))
+for png in sorted(run4.glob('comparison_*.png')):
+    display(Image(str(png), width=700))
+
+loss = (summary4.get('exposure') or {}).get('loss')
+if loss:
+    print('total indicative loss: Rs %.2f crore (%s)' % (
+        loss['total_indicative_loss_crore_inr'], loss['caveat']))
+    display(pd.DataFrame([{'class': k, **v} for k, v in loss['by_class'].items()]))
+else:
+    print('no land cover -> no loss table (check the ee auth cell)')""")
+
+code("""# 4) Download the milestone-4 outputs
+from google.colab import files
+run4 = Path(summary4['run_dir'])
+for pattern in ('comparison*.json', 'comparison*.png', 'screening/loss.csv',
+                'screening/exposure.csv', 'screening/*.kml', 'dualsphysics/depth_max.tif'):
+    for f in run4.rglob(pattern) if '/' in pattern else run4.glob(pattern):
+        files.download(str(f))""")
+
 md("""## Optional A — Sentinel-1 flood mapping in GEE (near-real-time module)
 
 Maps the actual 4 Oct 2023 South Lhonak GLOF extent around the lower Teesta
