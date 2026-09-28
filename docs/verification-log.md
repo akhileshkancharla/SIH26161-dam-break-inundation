@@ -44,12 +44,29 @@ original papers before publication:
   post tools for Windows AND Linux, but NOT the solver — that needs the full
   package (dual.sphysics.org, registration form) or compiling `src/`.
   GenCase accepted our real-terrain STL case (Machhu near-field, dp=4 m:
-  78,078 fluid / 32,702 boundary). Notes: the native `drawbathymetry`/
-  zpoints route SEGFAULTS GenCase — use `drawfilestl` with local coordinates;
-  GenCase VTKs are binary, particle counts come from the `.out` text.
-  **TODO**: compile or install the solver on Colab, pin the PartVTK
-  `-savecsv` column layout, run the standard dambreak benchmark convergence
-  study.
+  78,078 fluid / 32,702 boundary). The native `drawbathymetry`/zpoints route
+  SEGFAULTS GenCase — use `drawfilestl` with local coordinates; GenCase VTKs
+  are binary, particle counts come from the `.out` text.
+
+  **Solver executed locally (2026-09-28, full v5.4.3 package, CPU build)**:
+  Machhu near-field 780x390 m, dp=6 m, 45 s simulated time — GenCase ->
+  solver -> PartVTK -> depth raster all work. Pinned formats and gotchas:
+  - PartVTK `-savevtk` = legacy **BINARY POLYDATA, big-endian floats** right
+    after the `POINTS n float` line (our parser handles it).
+  - `-onlytype` filters apply to VTK **only**; `-saveascii` files always
+    contain ALL particles (columns x y z id vel.x vel.y vel.z rhop press),
+    so never use them for fluid-only extraction.
+  - A bare `drawfilestl` terrain is a thin shell: seal the domain floor
+    (box under zmin) and thicken the crust (`advanced` + `depth depthmin`),
+    or the reservoir drains through gaps and particles exit the domain
+    (`NpOutPos` in RunPARTs.csv shows this immediately).
+  - Reference the bed to the local **thalweg**, not the dam cell (the dam
+    coordinate can sit on a valley side), and clamp the pool to the natural
+    rim of the reservoir box — otherwise the pool floods the whole patch.
+  - Depth-from-particle-counts (count x dp) quantises at dp: choose
+    dp <= ~half the expected flow depth, i.e. GPU-scale runs for real pools.
+  **TODO**: GPU run (3050/Colab T4) at dp<=2 m, dambreak benchmark
+  convergence study, SPH-vs-Delft3D-vs-screening comparison.
 - Delft3D FM: model builder verified against hydrolib-core 1.4.0 + meshkernel
   (24 tests). Executing needs the `dflowfm` binary — **TODO** verify the
   Colab recipe (`condacolab` + `mamba install -c deltares delft3dfm`) and the

@@ -142,3 +142,18 @@ def test_gencase_validates_our_case(tmp_path):
     assert (tmp_path / "CaseSph_out" / "CaseSph.bi4").exists()
     out_txt = (tmp_path / "CaseSph_out" / "CaseSph.out")
     assert "Total particles" in out_txt.read_text(errors="replace")
+
+
+def test_parse_vtk_points_binary(tmp_path):
+    """PartVTK writes legacy BINARY POLYDATA (big-endian floats)."""
+    import struct
+    pts = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.5]], dtype=">f4")
+    payload = pts.tobytes()
+    vtk = tmp_path / "p.vtk"
+    vtk.write_bytes(
+        b"# vtk DataFile Version 3.0\nvtk output\nBINARY\nDATASET POLYDATA\n"
+        + b"POINTS 2 float\n" + payload + b"\nPOINT_DATA 2\n"
+    )
+    out = parse_vtk_points(vtk)
+    assert out.shape == (2, 3)
+    assert out[1].tolist() == [4.0, 5.0, 6.5]

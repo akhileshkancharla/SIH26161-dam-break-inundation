@@ -151,7 +151,9 @@ python scripts/make_colab_notebook.py   # regenerate the Colab notebook
 
 1. ✅ Data pipeline + DEM ingestion + dam registry + breach module + screening
 2. ◐ Delft3D FM: model builder done; execution + validation run pending the binary
-3. ◐ DualSPHysics: v5.4 case generation + GenCase validation done; solver execution + benchmark convergence pending the solver binary
+3. ◐ DualSPHysics: case generation + full CPU execution chain verified
+   (GenCase -> solver -> PartVTK -> depth raster on the Machhu near-field);
+   GPU runs at finer dp + benchmark convergence pending
 4. ⏳ Solver comparison (arrival/peak/extent CSI) + depth-damage loss analysis
 5. ⏳ GEE near-real-time watchlist (scheduled Sentinel-1 re-checks)
 6. ⏳ Dashboard polish: results map with time slider, scenario library, PDF report

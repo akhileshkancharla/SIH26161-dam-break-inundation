@@ -29,6 +29,7 @@ from __future__ import annotations
 import os
 import platform
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -59,36 +60,62 @@ class SPHTools:
         return self.solver is not None or self.solver_gpu is not None
 
 
+def _scan_root(root: Path, windows: bool) -> SPHTools:
+    """Collect tools from one DualSPHysics tree (clone or full package)."""
+    bindir = root / ("bin/windows" if windows else "bin/linux")
+    tools = SPHTools(root=root)
+    if not bindir.exists():
+        return tools
+    gencase = bindir / ("GenCase_win64.exe" if windows else "GenCase_linux64")
+    partvtk = bindir / ("PartVTK_win64.exe" if windows else "PartVTK_linux64")
+    tools.gencase = gencase if gencase.exists() else None
+    tools.partvtk = partvtk if partvtk.exists() else None
+    # Solver naming from the official run scripts, e.g.
+    # DualSPHysics5.4CPU_win64.exe (CPU) / DualSPHysics5.4_win64.exe (GPU);
+    # skip the 4.0 LiquidGas variants shipped in the full package.
+    def pick(pattern: str, exclude: tuple[str, ...]) -> Path | None:
+        hits = [p for p in sorted(bindir.glob(pattern))
+                if not any(x in p.name for x in exclude)]
+        return hits[0] if hits else None
+
+    tools.solver = pick("DualSPHysics*CPU*", ("LiquidGas",))
+    tools.solver_gpu = pick("DualSPHysics*_win64.exe" if windows else "DualSPHysics*_linux64",
+                            ("CPU", "LiquidGas"))
+    return tools
+
+
 def find_tools() -> SPHTools:
-    """Locate DualSPHysics binaries (env overrides win, then known roots)."""
-    env_root = os.environ.get("DUALSPHYSICS_ROOT")
+    """Locate DualSPHysics binaries.
+
+    Roots considered: $DUALSPHYSICS_ROOT first, then any DualSPHysics*
+    directory next to this project (the git clone ships GenCase/post tools;
+    the full package from dual.sphysics.org also has the solver and is
+    preferred when both are present).
+    """
     candidates: list[Path] = []
+    env_root = os.environ.get("DUALSPHYSICS_ROOT")
     if env_root:
         candidates.append(Path(env_root))
-    for p in (Path.cwd(), *Path.cwd().parents[:2]):
+    for p in (Path.cwd(), *Path.cwd().parents[:3]):
+        candidates.extend(sorted(p.glob("DualSPHysics*"), reverse=True))
         candidates.extend([p / "DualSPHysics", p.parent / "DualSPHysics"])
 
     windows = platform.system() == "Windows"
-    tools = SPHTools()
+    seen: set[Path] = set()
+    fallback: SPHTools | None = None
     for root in candidates:
-        if not root.exists():
+        root = root.resolve()
+        if not root.is_dir() or root in seen:
             continue
-        bindir = root / ("bin/windows" if windows else "bin/linux")
-        if not bindir.exists():
+        seen.add(root)
+        tools = _scan_root(root, windows)
+        if tools.gencase is None and tools.solver is None:
             continue
-        tools.root = root
-        gencase = bindir / ("GenCase_win64.exe" if windows else "GenCase_linux64")
-        partvtk = bindir / ("PartVTK_win64.exe" if windows else "PartVTK_linux64")
-        tools.gencase = gencase if gencase.exists() else None
-        tools.partvtk = partvtk if partvtk.exists() else None
-        # Solver naming from the official run scripts, e.g.
-        # DualSPHysics5.4CPU_win64.exe (CPU) / DualSPHysics5.4_win64.exe (GPU).
-        cpu = sorted(bindir.glob("DualSPHysics*CPU*"))
-        gpu = [p for p in sorted(bindir.glob("DualSPHysics*")) if "CPU" not in p.name]
-        tools.solver = cpu[0] if cpu else None
-        tools.solver_gpu = gpu[0] if gpu else None
-        break
-
+        if tools.complete:
+            return tools          # full package wins
+        if fallback is None and tools.gencase is not None:
+            fallback = tools      # clone: GenCase only
+    tools = fallback or SPHTools()
     # Direct env overrides last (highest priority).
     if os.environ.get("DUALSPHYSICS_GENCASE"):
         tools.gencase = Path(os.environ["DUALSPHYSICS_GENCASE"])
@@ -160,7 +187,28 @@ def write_case_xml(
     ET.SubElement(mainlist, "setdrawmode", mode="full")
 
     ET.SubElement(mainlist, "setmkbound", mk="0")
-    ET.SubElement(mainlist, "drawfilestl", file=stl_file)
+    stl = ET.SubElement(mainlist, "drawfilestl", file=stl_file, advanced="true")
+    ET.SubElement(stl, "depth", depthmin=f"{3 * dp:g}")  # solid crust under the surface
+
+    ET.SubElement(mainlist, "setmkbound", mk="1")
+    floor = ET.SubElement(mainlist, "drawbox")
+    ET.SubElement(floor, "boxfill").text = "solid"
+    ET.SubElement(floor, "point",
+                  x=f"{pointmin[0]:.2f}", y=f"{pointmin[1]:.2f}", z=f"{pointmin[2] - dp:.2f}")
+    ET.SubElement(floor, "size",
+                  x=f"{pointmax[0] - pointmin[0]:.2f}",
+                  y=f"{pointmax[1] - pointmin[1]:.2f}", z=f"{3 * dp:g}")
+
+    # Upstream containment wall at the reservoir's upstream face (the DEM
+    # patch is clipped there; without the wall the pool leaks off the edge).
+    ET.SubElement(mainlist, "setmkbound", mk="2")
+    wall = ET.SubElement(mainlist, "drawbox")
+    ET.SubElement(wall, "boxfill").text = "solid"
+    ET.SubElement(wall, "point", x=f"{water_point[0] - 2 * dp:.2f}",
+                  y=f"{pointmin[1]:.2f}", z=f"{pointmin[2]:.2f}")
+    ET.SubElement(wall, "size", x=f"{2 * dp:g}",
+                  y=f"{pointmax[1] - pointmin[1]:.2f}",
+                  z=f"{water_point[2] + water_size[2] + 2 * dp - pointmin[2]:.2f}")
 
     ET.SubElement(mainlist, "setmkfluid", mk="0")
     drawbox = ET.SubElement(mainlist, "drawbox")
@@ -216,15 +264,16 @@ def run_solver(case_dir: Path, name: str, solver: Path, gpu: int | None = None,
 
 
 def run_partvtk(case_dir: Path, name: str, partvtk: Path, timeout: int = 600) -> tuple[bool, str]:
-    """Extract fluid particles per frame as VTK (visual) and CSV (parsing).
+    """Extract fluid particles per frame.
 
-    The CSV output carries a column header, which makes it the robust
-    extraction route; the VTKs GenCase/PartVTK write are binary by default.
+    ``-saveascii`` writes headerless columns "x y z id vel.x vel.y vel.z
+    rhop press type" per particle (format pinned against PartVTK v5.4);
+    ``-savevtk`` (binary by default) is kept for visualisation only.
     """
     proc = subprocess.run(
         [str(partvtk), "-dirdata", f"{name}_out/data",
+         "-saveascii", f"{name}_out/particles/PartFluid",
          "-savevtk", f"{name}_out/particles/PartFluid",
-         "-savecsv", f"{name}_out/particles/PartFluid",
          "-onlytype:-all,+fluid"],
         cwd=str(case_dir), capture_output=True, text=True, timeout=timeout,
     )
@@ -232,29 +281,20 @@ def run_partvtk(case_dir: Path, name: str, partvtk: Path, timeout: int = 600) ->
     return proc.returncode == 0, log[-2000:]
 
 
-def parse_csv_particles(path: Path) -> np.ndarray:
-    """XYZ array from a PartVTK -savecsv frame (header row with Pos* columns)."""
-    import csv
-
-    with open(path, "r", errors="replace", newline="") as fh:
-        header = next(csv.reader(fh))
-    col = {name.strip().lower(): i for i, name in enumerate(header)}
-    ix = col.get("posx") or col.get("x")
-    iy = col.get("posy") or col.get("y")
-    iz = col.get("posz") or col.get("z")
-    if ix is None or iy is None or iz is None:
-        raise ValueError(f"unrecognised particle CSV header in {path}")
-    data = np.loadtxt(path, delimiter=";", skiprows=1, usecols=(ix, iy, iz),
-                      ndmin=2)
-    if data.size == 0 or data.shape[1] != 3:
-        data = np.loadtxt(path, delimiter=",", skiprows=1, usecols=(ix, iy, iz),
-                          ndmin=2)
-    return data
-
-
 def parse_vtk_points(path: Path) -> np.ndarray:
-    """XYZ array from a legacy ASCII POLYDATA VTK POINTS block."""
-    lines = Path(path).read_text(errors="replace").splitlines()
+    """XYZ array from a legacy POLYDATA VTK POINTS block.
+
+    Handles both the ASCII form and the BINARY form PartVTK writes by
+    default (raw big-endian floats right after the "POINTS n float" line).
+    """
+    raw = Path(path).read_bytes()
+    if b"\nBINARY" in raw[:200]:
+        idx = raw.find(b"\nPOINTS")
+        line_end = raw.find(b"\n", idx + 1)
+        n = int(raw[idx + 1:line_end].split()[1])
+        return np.frombuffer(raw, dtype=">f4", count=n * 3,
+                             offset=line_end + 1).reshape(n, 3).astype(np.float64)
+    lines = raw.decode(errors="replace").splitlines()
     for i, line in enumerate(lines):
         if line.startswith("POINTS"):
             n = int(line.split()[1])
@@ -322,10 +362,26 @@ def run_sph(
     y1 = transform.f
     y0 = transform.f + transform.e * z.shape[0]
 
-    # Pool level: bed at dam + breach water depth, capped inside the patch.
+    # Bed at the local thalweg (the dam coordinate can land on a valley
+    # side, which would float the reservoir above the channel).
     rc_local = (min(dam_rowcol[0], z.shape[0] - 1), min(dam_rowcol[1], z.shape[1] - 1))
-    bed_at_dam = float(z[rc_local]) if np.isfinite(z[rc_local]) else zmin
-    pool_z = min(bed_at_dam + breach.water_depth_m, zmax + 5.0)
+    r0w = max(rc_local[0] - 5, 0); r1w = min(rc_local[0] + 6, z.shape[0])
+    c0w = max(rc_local[1] - 5, 0); c1w = min(rc_local[1] + 6, z.shape[1])
+    window = z[r0w:r1w, c0w:c1w]
+    bed_at_dam = float(np.nanmin(window)) if np.isfinite(window).any() else zmin
+
+    # Pool requested by the breach scenario; clamped by the natural rim of
+    # the reservoir box (valley walls at its y-faces) so the pool is held by
+    # terrain rather than spilling over the whole near-field patch.
+    pool_requested = bed_at_dam + breach.water_depth_m
+    ly_, lx_ = z.shape
+    # Reservoir box side faces in array indices (row 0 == local y = ly).
+    row_top, row_bot = int(0.05 * ly_), min(int(0.95 * ly_), ly_ - 1)
+    c0b, c1b = int(0.05 * lx_), min(int(RESERVOIR_FRACTION * lx_) + 1, lx_)
+    rim = float(np.nanmin(np.concatenate([
+        z[row_top, c0b:c1b], z[row_bot, c0b:c1b],
+    ])))
+    pool_z = min(pool_requested, rim - 1.0)
     if pool_z <= zmin:
         raise RuntimeError("computed pool level is below the terrain minimum")
 
@@ -368,6 +424,7 @@ def run_sph(
         "case_dir": str(run_dir), "executed": False, "gencase_ok": None,
         "dp_m": dp, "bed_samples": int(finite.sum()),
         "nearfield_extent_m": [round(x1 - x0), round(y1 - y0)],
+        "pool_requested_m": pool_requested,
         "pool_level_m": pool_z,
     }
 
@@ -396,12 +453,12 @@ def run_sph(
         # are binary): "Total particles: 792,216 (bound=142788 ... fluid=649428)".
         out_text = ((out / "CaseSph.out").read_text(errors="replace")
                     if (out / "CaseSph.out").exists() else "")
-        match = re.search(r"bound=([\d,]+)", out_text)
-        if match:
-            n_bound = int(match.group(1).replace(",", ""))
-        match = re.search(r"fluid=([\d,]+)", out_text)
-        if match:
-            n_fluid = int(match.group(1).replace(",", ""))
+        total = re.search(
+            r"Total particles:[\d,\s]*\(bound=([\d,]+)[^)]*\)[\s\S]*?fluid=([\d,]+)",
+            out_text)
+        if total:
+            n_bound = int(total.group(1).replace(",", ""))
+            n_fluid = int(total.group(2).replace(",", ""))
         diagnostics["initial_fluid_particles"] = n_fluid
         diagnostics["initial_boundary_particles"] = n_bound
         notes.append(
@@ -418,7 +475,15 @@ def run_sph(
         return SolverResult(solver="dualsphysics", layers={}, diagnostics=diagnostics, notes=notes)
 
     if execute:
-        solver = tools.solver_gpu if tools.solver_gpu else tools.solver
+        # GPU only when an NVIDIA driver is present (DUALSPHYSICS_DEVICE
+        # can force "gpu" or "cpu"); the GPU exe fails hard without CUDA.
+        device = os.environ.get("DUALSPHYSICS_DEVICE", "auto")
+        use_gpu = tools.solver_gpu is not None and (
+            device == "gpu"
+            or (device == "auto" and shutil.which("nvidia-smi") is not None)
+        )
+        solver = tools.solver_gpu if use_gpu else tools.solver
+        diagnostics["solver_device"] = "gpu" if use_gpu else "cpu"
         ok, log = run_solver(run_dir, "CaseSph", solver)
         diagnostics["executed"] = ok
         if not ok:
@@ -431,34 +496,24 @@ def run_sph(
             ok_v, _ = run_partvtk(run_dir, "CaseSph", tools.partvtk)
             if ok_v:
                 pdir = run_dir / "CaseSph_out" / "particles"
-                csv_frames = sorted(pdir.glob("PartFluid_*.csv"))
-                vtk_frames = sorted(pdir.glob("PartFluid_*.vtk"))
+                # -onlytype:+fluid applies to the VTK output; -saveascii files
+                # always contain every particle and are kept only for debugging.
+                frames = sorted(pdir.glob("PartFluid_*.vtk"))
                 extent = (0.0, 0.0, lx, ly)
                 depth = np.zeros((
                     max(1, int(round(ly / dp))),
                     max(1, int(round(lx / dp))),
                 ))
                 used = 0
-                for frame in csv_frames:
+                for frame in frames:
                     try:
-                        pts = parse_csv_particles(frame)
+                        pts = parse_vtk_points(frame)
                     except Exception:
                         continue
                     depth = np.maximum(depth, particles_to_depth(pts, extent, dp))
                     used += 1
                 if not used:
-                    for frame in vtk_frames:
-                        try:
-                            pts = parse_vtk_points(frame)
-                        except Exception:
-                            continue
-                        depth = np.maximum(depth, particles_to_depth(pts, extent, dp))
-                        used += 1
-                if not used:
-                    notes.append(
-                        "particle frames could not be parsed (binary VTK and/or "
-                        "unknown CSV layout) — pin the format on the first solver run"
-                    )
+                    notes.append("no parsable particle frames (PartFluid_*.vtk)")
                 geo_transform = Affine(dp, 0, x0, 0, -dp, y1)  # back to UTM
                 layers = {
                     "depth_max": RasterLayer(
