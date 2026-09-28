@@ -21,16 +21,27 @@ def depth_polygons(
     transform,
     crs,
     min_depth: float = 0.1,
+    min_patch_ha: float = 0.25,
 ) -> gpd.GeoDataFrame:
     """Dissolved inundation polygons per depth class.
+
+    Patches smaller than ``min_patch_ha`` are sieved away before
+    polygonisation to avoid sliver polygons from raster noise.
 
     Fields (kept shapefile-safe, <= 10 chars): dclass, dlo_m, dhi_m,
     area_ha, maxdepth.
     """
+    cell_area = abs(transform.a * transform.e)
+    sieve_size = max(2, int(min_patch_ha * 1e4 / cell_area))
     classes = classify_depth(np.where(depth >= min_depth, depth, 0.0))
     records = []
     for i, (lo, hi, label) in enumerate(DEPTH_CLASSES, start=1):
         mask = classes == i
+        if not mask.any():
+            continue
+        mask = rasterio.features.sieve(
+            mask.astype(np.uint8), size=sieve_size
+        ).astype(bool)
         if not mask.any():
             continue
         geoms = [shape(g) for g, v in rasterio.features.shapes(

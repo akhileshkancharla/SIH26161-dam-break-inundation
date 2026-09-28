@@ -138,6 +138,18 @@ def run_pipeline(scenario: Scenario | str | Path | dict, out_root: str | Path | 
 
     # --- solvers ---------------------------------------------------------------
     from .solvers.screening import run_screening
+    path_xy = None
+    if "delft3d_fm" in scenario.solvers:
+        from .preparation.terrain import priority_flood_fill, trace_flow_path, coarsen
+        from rasterio.transform import Affine
+        z_small, factor = coarsen(dem.z, 4)
+        filled = priority_flood_fill(z_small)
+        small_transform = dem.transform @ Affine.scale(factor, factor)
+        path_xy = np.asarray(
+            trace_flow_path(filled, dam_rc[0] // factor, dam_rc[1] // factor,
+                            small_transform, max(dem.shape) * abs(dem.transform.a) * 1.5),
+            dtype=float,
+        )
     results: dict[str, SolverResult] = {}
     for solver in scenario.solvers:
         if solver == "screening":
@@ -153,7 +165,12 @@ def run_pipeline(scenario: Scenario | str | Path | dict, out_root: str | Path | 
             )
         elif solver == "delft3d_fm":
             from .solvers.delft3d.adapter import run_delft3d
-            results[solver] = run_delft3d(dem, dam_rc, breach, t, q, n_map, run_dir)
+            log("building D-Flow FM case (delft3d)")
+            results[solver] = run_delft3d(
+                dem, dam_rc, breach, t, q, n_map, run_dir,
+                path_xy=path_xy, duration_s=float(t[-1]),
+                mesh_resolution_m=scenario.terrain.mesh_resolution_m,
+            )
         elif solver == "dualsphysics":
             from .solvers.sph.adapter import run_sph
             results[solver] = run_sph(dem, dam_rc, breach, run_dir)

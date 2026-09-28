@@ -74,6 +74,7 @@ class TerrainSpec:
     corridor_length_km: float = 30.0
     corridor_width_km: float = 6.0
     resolution_m: float = 30.0
+    mesh_resolution_m: float = 60.0  # D-Flow FM mesh spacing (delft3d solver)
     dem_path: str | None = None  # when dem == "file:<path>"
 
 
@@ -191,6 +192,7 @@ def load_scenario(source: str | Path | dict[str, Any]) -> Scenario:
         corridor_length_km=float(t.get("corridor_length_km", 30.0)),
         corridor_width_km=float(t.get("corridor_width_km", 6.0)),
         resolution_m=float(t.get("resolution_m", 30.0)),
+        mesh_resolution_m=float(t.get("mesh_resolution_m", 60.0)),
         dem_path=dem_path,
     )
 

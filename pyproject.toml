@@ -25,7 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 gee = ["earthengine-api"]
-delft3d = ["hydrolib-core"]
+delft3d = ["hydrolib-core", "meshkernel"]
 sph = ["numpy-stl"]
 dev = ["pytest"]
 

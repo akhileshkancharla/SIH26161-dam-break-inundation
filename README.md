@@ -107,9 +107,15 @@ tests/                            pytest suite (offline)
 - **screening** — runs anywhere (pure numpy/scipy). A volume-conserving
   cross-section fill along the traced river; for triage and demos only.
   Outputs are always labelled "screening".
-- **delft3d_fm** — adapter writes the boundary time series today; full model
-  construction via `hydrolib-core` + the `dflowfm` binary is milestone 2
-  (Linux/Docker). `DFLOWFM_BIN` env var points at the executable.
+- **delft3d_fm** — full model builder works (hydrolib-core + meshkernel):
+  rectangular mesh from the DEM window, bed level from samples, reservoir
+  polygon with full-pool initial level, native `dambreak` structure with
+  Verheij–van der Knaap growth timed by the Froehlich failure time,
+  downstream water-level boundary on the mesh edge the river exits,
+  observation points every 2 km, Manning friction. Executing needs the
+  `dflowfm` binary (Linux/WSL/Colab via conda — see the notebook's Optional C;
+  `DFLOWFM_BIN` env var). Mesh spacing via `terrain.mesh_resolution_m`
+  (default 60 m; ~392k cells for the Machhu corridor).
 - **dualsphysics** — adapter clips the near-field DEM, writes terrain STL +
   v5-style `Case_def.xml`; execution driver on GPU (Colab T4 / local NVIDIA)
   is milestone 3. `DUALSPHYSICS_ROOT` points at the DualSPHysics checkout.
@@ -136,7 +142,7 @@ python scripts/make_colab_notebook.py   # regenerate the Colab notebook
 ## Roadmap
 
 1. ✅ Data pipeline + DEM ingestion + dam registry + breach module + screening
-2. ⏳ Delft3D FM full model build (hydrolib-core + meshkernel) and validation run
+2. ◐ Delft3D FM: model builder done; execution + validation run pending the binary
 3. ⏳ DualSPHysics execution driver + standard dambreak benchmark convergence
 4. ⏳ Solver comparison (arrival/peak/extent CSI) + depth-damage loss analysis
 5. ⏳ GEE near-real-time watchlist (scheduled Sentinel-1 re-checks)

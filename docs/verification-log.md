@@ -43,5 +43,11 @@ original papers before publication:
 - DualSPHysics on Colab: clone-without-compile reported to work (forum);
   compiling from source hit `libdsphchrono.so` issues — **TODO** reproduce on
   a T4 and record the exact working recipe.
-- Delft3D FM: `dflowfm` Linux binary route — **TODO** document the install
-  (OSS deltares distribution or Docker) on the team laptop/WSL.
+- Delft3D FM: model builder verified against hydrolib-core 1.4.0 + meshkernel
+  (24 tests). Executing needs the `dflowfm` binary — **TODO** verify the
+  Colab recipe (`condacolab` + `mamba install -c deltares delft3dfm`) and the
+  exact channel/package name; also verify the generated case runs (mdu +
+  sidecars accepted by the kernel) on Linux/WSL and record the runtime for
+  the Machhu case (~392k cells @ 60 m).
+- Dambreak structure starter values (f1=f2=1, uCrit=0.5 m/s, algorithm 2
+  Verheij–van der Knaap) — **TODO** calibrate against literature/test cases.

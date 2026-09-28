@@ -213,10 +213,64 @@ breach = breach_parameters(
 res = run_sph(dem, rc, breach, Path('outputs/sph_case'))
 print('\\n'.join(res.notes))""")
 
+md("""## Optional C — Delft3D FM regional model (CPU, experimental)
+
+The framework builds a complete D-Flow FM case (mesh + bed level +
+reservoir initial level + native dambreak structure + boundary + obs
+points). Executing it needs the Linux `dflowfm` binary; on Colab the
+route is condacolab + the Deltares conda channel. This recipe is
+experimental — verify channel/package names (tracked in
+docs/verification-log.md) before relying on it.""")
+
+code("""# 1) Build the case with our pipeline (no binary needed; self-contained)
+from pathlib import Path
+import rasterio.warp, numpy as np
+from dam_break.config import load_scenario
+from dam_break.ingestion.dem import fetch_dem
+from dam_break.breach import breach_parameters, hydrograph_from_breach
+from dam_break.pipeline import _bbox_around, _dam_rowcol, _clip_to_corridor
+from dam_break.solvers.delft3d.adapter import run_delft3d
+
+sc = load_scenario(cfg)
+bbox = _bbox_around(sc.dam.lat, sc.dam.lon, sc.terrain.corridor_length_km * 1.6 / 111.0)
+dem = fetch_dem(sc.terrain, bbox)
+rc = _dam_rowcol(dem, sc.dam.lat, sc.dam.lon)
+dem, rc = _clip_to_corridor(dem, rc, sc.terrain.corridor_length_km, sc.terrain.corridor_width_km)
+
+breach = breach_parameters(
+    mode=sc.breach.mode, case=sc.breach.case, storage_m3=sc.dam.storage_m3,
+    release_fraction=sc.breach.release_fraction, dam_height_m=sc.dam.height_m)
+t, q = hydrograph_from_breach(breach, dt_s=60.0, duration_h=sc.run.duration_h)
+
+# 120 m mesh keeps Colab runtimes manageable; use 60 m for the final run
+res = run_delft3d(dem, rc, breach, t, q, 0.05, Path('outputs/delft3d_manual'),
+                  path_xy=None, duration_s=sc.run.duration_h * 3600,
+                  mesh_resolution_m=120.0)
+print(json.dumps(res.diagnostics, indent=1, default=str))
+print('case ready at:', res.diagnostics['mdu'])""")
+
+code("""# 2) (Experimental) install dflowfm via conda and run the case.
+# NOTE: condacolab restarts the runtime once; re-run this cell afterwards.
+%pip install -q condacolab
+import condacolab
+condacolab.install()""")
+
+code("""# After the condacolab restart, run this cell (same notebook):
+!mamba install -y -c deltares delft3dfm
+import os
+os.environ['DFLOWFM_BIN'] = 'dflowfm'   # once installed on PATH
+
+case_dir = 'outputs/delft3d_manual'     # from the build cell above
+%cd {case_dir}
+!dflowfm flowfm.mdu
+# Map output: output/flowfm_map.nc -> post-process with the same
+# dam_break.postprocess tools used for the screening solver.""")
+
 md("""## Next steps
 
-- **Delft3D FM (milestone 2):** install `hydrolib-core` + the `dflowfm`
-  binary on a Linux box; the adapter writes the boundary file already.
+- **Delft3D FM:** the case builder is done; execution needs `dflowfm`
+  (Linux/WSL/Colab via conda, Optional C). Then compare arrival/peak/extent
+  against the screening solver with `dam_break.postprocess.metrics`.
 - **Full SPH runs (milestone 3):** run the generated case with the
   DualSPHysics binaries on the T4; keep `dp` >= 2 m and the domain <= 2 km.
 - **Save outputs to Drive** so long runs survive session timeouts:
