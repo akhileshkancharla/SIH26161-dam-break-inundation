@@ -187,18 +187,28 @@ sealed floor, terrain crust, rim-clamped reservoir), runs GenCase, executes
 the solver (GPU when a driver is present, else CPU) and bins the fluid
 particles into a georeferenced depth raster.""")
 
-code("""# 1) Mount Drive and unpack the full DualSPHysics package (has the solver)
-from google.colab import drive
-drive.mount('/content/drive')
-
-import os, zipfile
+code("""# 1) Get the full DualSPHysics package (has the solver) onto this VM.
+# Route A (no Drive mount needed): share the zip from drive.google.com as
+#   "Anyone with the link", copy the FILE_ID from the share link, paste below.
+# Route B: if you prefer mounting, comment the gdown block out and set ZIP
+#   to your mounted path.
+%pip install -q gdown
+import gdown, os, zipfile
 from pathlib import Path
 
-ZIP = '/content/drive/MyDrive/DualSPHysics_v5.4.3.zip'   # <- adjust to your Drive path
+FILE_ID = 'PASTE-YOUR-DRIVE-FILE-ID-HERE'   # share link: .../file/d/<FILE_ID>/view
+ZIP = '/content/DualSPHysics_v5.4.3.zip'
 root = Path('/content/DualSPHysics_v5.4')
+
 if not root.exists():
+    if 'PASTE-YOUR' not in FILE_ID and not Path(ZIP).exists():
+        gdown.download(id=FILE_ID, output=ZIP)
+    assert Path(ZIP).exists(), (
+        'set FILE_ID to your shared Drive zip, or upload the zip manually '
+        'and set ZIP to its path')
     with zipfile.ZipFile(ZIP) as z:
         z.extractall('/content')
+
 os.environ['DUALSPHYSICS_ROOT'] = str(root)
 !chmod -R +x {root}/bin/linux
 
@@ -206,7 +216,7 @@ from dam_break.solvers.sph import find_tools
 tools = find_tools()
 print('gencase:', tools.gencase)
 print('solver: ', tools.solver)
-assert tools.solver is not None, 'solver binary not found - check the zip path'
+assert tools.solver is not None, 'solver binary not found - check the zip contents'
 !nvidia-smi -L 2>/dev/null || echo 'WARNING: no GPU runtime - solver will use CPU'""")
 
 code("""# 2) Build, validate and simulate the Machhu-II near-field case
