@@ -185,6 +185,8 @@ def run_pipeline(scenario: Scenario | str | Path | dict, out_root: str | Path | 
             from .solvers.sph.adapter import run_sph
             results[solver] = run_sph(
                 dem, dam_rc, breach, run_dir,
+                dp=scenario.run.sph_dp_m,
+                nearfield_length_m=scenario.run.sph_nearfield_m,
                 timemax_s=scenario.run.sph_timemax_s)
         for note in results[solver].notes:
             log(f"  note: {note}")

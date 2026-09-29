@@ -263,13 +263,17 @@ def run_gencase(case_dir: Path, name: str, gencase: Path, timeout: int = 600) ->
 
 
 def run_solver(case_dir: Path, name: str, solver: Path, gpu: int | None = None,
-               timeout: int = 0) -> tuple[bool, str]:
+               timeout: int = 7200) -> tuple[bool, str]:
     """Run the solver, streaming its per-part progress lines as they come.
 
     The solver prints one summary line per output part (default every
     horizon/20 s of simulated time); these are echoed live so a
-    hours-long solve is not a black box in the notebook.
+    hours-long solve is not a black box in the notebook. ``timeout`` is a
+    wall-clock cap (s): a wedged solver is killed instead of hanging the
+    pipeline forever.
     """
+    import threading
+
     args = [str(solver), f"{name}_out/{name}", f"{name}_out"]
     if gpu is not None:
         args[1:1] = ["-gpu", str(gpu)]
@@ -279,12 +283,23 @@ def run_solver(case_dir: Path, name: str, solver: Path, gpu: int | None = None,
         env=_tool_env(solver),
     )
     lines: list[str] = []
+    killed = {"flag": False}
+
+    def _kill() -> None:
+        killed["flag"] = True
+        proc.kill()
+    timer = threading.Timer(timeout, _kill)
+    timer.start()
+
     assert proc.stdout is not None
     for line in proc.stdout:
         lines.append(line)
         if any(k in line for k in ("Part ", "TOTAL", "ERROR", "Time ")):
             print(f"    {line.rstrip()[:110]}", flush=True)
     proc.wait()
+    timer.cancel()
+    if killed["flag"]:
+        lines.append(f"run_solver: killed after wall-clock cap of {timeout} s\n")
     log = "".join(lines)
     return proc.returncode == 0, log[-4000:]
 

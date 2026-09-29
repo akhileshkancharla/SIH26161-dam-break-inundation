@@ -99,6 +99,8 @@ class RunSpec:
     dt_s: float = 60.0
     attenuation_km: float | None = None  # exponential volume loss length scale
     sph_timemax_s: float | None = None   # SPH simulated horizon (default: capped 300 s)
+    sph_dp_m: float = 4.0                # particle spacing; raises cut particles ~dp^-3
+    sph_nearfield_m: float = 1200.0      # near-field window length (width = length/2)
 
 
 @dataclass
@@ -222,6 +224,8 @@ def load_scenario(source: str | Path | dict[str, Any]) -> Scenario:
         sph_timemax_s=(
             float(run_cfg["sph_timemax_s"]) if run_cfg.get("sph_timemax_s") is not None else None
         ),
+        sph_dp_m=float(run_cfg.get("sph_dp_m", 4.0)),
+        sph_nearfield_m=float(run_cfg.get("sph_nearfield_m", 1200.0)),
     )
 
     solvers = list(cfg.get("solvers") or ["screening"])

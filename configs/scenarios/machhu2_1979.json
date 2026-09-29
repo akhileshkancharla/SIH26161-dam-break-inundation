@@ -32,7 +32,9 @@
     "duration_h": 12,
     "dt_s": 60,
     "sph_timemax_s": 90,
-    "_sph_note": "90 s covers the flood front crossing the 1.2 km near-field at 10-15 m/s; raise for longer windows at ~3.5 h GPU per extra 90 s"
+    "_sph_note": "dp=6 m + 1 km near-field: fits the T4's shared-memory neighbour grid (dp=4/1.2 km failed with 'cannot allocate shared memory blocks'); ~235k particles, horizon 90 s",
+    "sph_dp_m": 6.0,
+    "sph_nearfield_m": 1000.0
   },
   "exports": [
     "shp",
