@@ -95,3 +95,31 @@ while SPH holds its whole release in the 800 m window; SPH depth comes from
 particle-count x dp (quantised, inflated at dp=6); the SPH pool is
 rim-clamped (percentile-based rim) to ~72 m vs the 94.8 m requested. The
 metrics themselves are unit-tested (perfect/disjoint/aligned-grid cases).
+
+## Milestone-4 full-chain run (2026-09-29, run 20260929T151918Z, Colab T4 VM, CPU solver)
+
+End-to-end: screening + DualSPHysics + WorldCover(GEE) exposure + loss +
+cross-solver comparison. Working Colab recipe: `DUALSPHYSICS_DEVICE=cpu`,
+scenario overrides `sph_dp_m=8 / sph_nearfield_m=800 / sph_timemax_s=90`
+(latest run used a smaller-dp variant — confirm from cell notes before quoting),
+ee project `tpu-access-492807` (WorldCover fetched at DEM resolution).
+
+- GPU verdict: v5.4 GPU binary cannot init on Colab driver 580 / CUDA 13
+  (no CUDA context in /proc/<pid>/maps; either refuses at the "Charge
+  calculator" shared-memory check or spins on CPU). CPU binary is the
+  Colab path; GPU needs DualSPHysics >= v5.6 or an older-driver runtime.
+- Exposure (corridor): tree 157 ha, shrubland 539, cropland 536, built-up
+  262, bare 186, water 272, grassland 11, wetland 4.
+- Indicative loss: **Rs ~776 crore** (built-up ~681, cropland ~92) —
+  placeholder curves/values, see caveat above; do not quote externally.
+- Comparison (SPH vs screening, 0.5 m threshold): CSI 0.05, POD 0.27,
+  FAR 0.94, bias 4.2; SPH wet 0.24 km2 vs screening 0.06 km2 in-window;
+  depth bias +10 m (SPH 13 m vs screening 3 m means). Dominant drivers
+  are structural, not model error: (a) particle-count x dp quantisation
+  makes any wet cell >= dp deep; (b) SPH raster is a max-over-time
+  envelope incl. splash; (c) footprints differ — the SPH window contains
+  the collapsing reservoir pool (always wet, deep) while screening in the
+  same 600 m feeds only breach-flux water. Use the SPH run for
+  extent/arrival narrative, not depth accuracy.
+- SPH depth raster: 158x300 cells, values quantised in 4 m steps, wet
+  0.224 km2, max 32 m (splash), bulk 12-16 m near the dam.
