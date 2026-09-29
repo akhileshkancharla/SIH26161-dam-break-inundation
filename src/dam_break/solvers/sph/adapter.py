@@ -507,6 +507,13 @@ def run_sph(
         )
         solver = tools.solver_gpu if use_gpu else tools.solver
         diagnostics["solver_device"] = "gpu" if use_gpu else "cpu"
+        # Announce before the (possibly hours-long) solve so a silent CPU
+        # fallback is visible in the notebook output immediately.
+        print(f"[sph] solver: {solver.name} ({diagnostics['solver_device'].upper()}); "
+              f"DUALSPHYSICS_DEVICE={device}")
+        if use_gpu and shutil.which("nvidia-smi") is None:
+            print("[sph] WARNING: GPU forced but nvidia-smi not found; "
+                  "solver will fail if no CUDA device is present")
         ok, log = run_solver(run_dir, "CaseSph", solver)
         diagnostics["executed"] = ok
         if not ok:
