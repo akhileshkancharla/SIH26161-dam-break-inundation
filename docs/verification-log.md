@@ -99,10 +99,14 @@ metrics themselves are unit-tested (perfect/disjoint/aligned-grid cases).
 ## Milestone-4 full-chain run (2026-09-29, run 20260929T151918Z, Colab T4 VM, CPU solver)
 
 End-to-end: screening + DualSPHysics + WorldCover(GEE) exposure + loss +
-cross-solver comparison. Working Colab recipe: `DUALSPHYSICS_DEVICE=cpu`,
-scenario overrides `sph_dp_m=8 / sph_nearfield_m=800 / sph_timemax_s=90`
-(latest run used a smaller-dp variant — confirm from cell notes before quoting),
+cross-solver comparison. Working Colab recipe: `DUALSPHYSICS_DEVICE=cpu`, `sph_timemax_s=60`,
 ee project `tpu-access-492807` (WorldCover fetched at DEM resolution).
+Confirmed config from the cell output: **dp=4 m, near-field 1200x632 m,
+pool 72.0 m, fluid 39,039 / boundary 151,305 particles, 60 s simulated,
+total wall time 5,381.7 s (~90 min)** — i.e. the same case size that the
+wedged GPU binary ground on for hours completed on the CPU binary in 90
+minutes once it was the only solver on the 2-core VM (the earlier CPU
+crawl coincided with the zombie GPU solver burning ~166% CPU).
 
 - GPU verdict: v5.4 GPU binary cannot init on Colab driver 580 / CUDA 13
   (no CUDA context in /proc/<pid>/maps; either refuses at the "Charge
