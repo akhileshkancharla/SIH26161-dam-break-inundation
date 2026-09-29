@@ -25,10 +25,20 @@
     "case": "expected",
     "release_fraction": 0.6
   },
-  "solvers": ["screening"],
+  "solvers": [
+    "screening"
+  ],
   "run": {
     "duration_h": 12,
-    "dt_s": 60
+    "dt_s": 60,
+    "sph_timemax_s": 90,
+    "_sph_note": "90 s covers the flood front crossing the 1.2 km near-field at 10-15 m/s; raise for longer windows at ~3.5 h GPU per extra 90 s"
   },
-  "exports": ["shp", "kml", "gpkg", "tif", "csv"]
+  "exports": [
+    "shp",
+    "kml",
+    "gpkg",
+    "tif",
+    "csv"
+  ]
 }

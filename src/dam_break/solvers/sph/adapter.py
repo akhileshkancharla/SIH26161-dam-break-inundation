@@ -264,14 +264,28 @@ def run_gencase(case_dir: Path, name: str, gencase: Path, timeout: int = 600) ->
 
 def run_solver(case_dir: Path, name: str, solver: Path, gpu: int | None = None,
                timeout: int = 0) -> tuple[bool, str]:
+    """Run the solver, streaming its per-part progress lines as they come.
+
+    The solver prints one summary line per output part (default every
+    horizon/20 s of simulated time); these are echoed live so a
+    hours-long solve is not a black box in the notebook.
+    """
     args = [str(solver), f"{name}_out/{name}", f"{name}_out"]
     if gpu is not None:
         args[1:1] = ["-gpu", str(gpu)]
-    proc = subprocess.run(
-        args, cwd=str(case_dir), capture_output=True, text=True,
-        timeout=timeout if timeout > 0 else None, env=_tool_env(solver),
+    proc = subprocess.Popen(
+        args, cwd=str(case_dir), stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT, text=True, bufsize=1,
+        env=_tool_env(solver),
     )
-    log = (proc.stdout or "") + (proc.stderr or "")
+    lines: list[str] = []
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        lines.append(line)
+        if any(k in line for k in ("Part ", "TOTAL", "ERROR", "Time ")):
+            print(f"    {line.rstrip()[:110]}", flush=True)
+    proc.wait()
+    log = "".join(lines)
     return proc.returncode == 0, log[-4000:]
 
 
@@ -510,7 +524,7 @@ def run_sph(
         # Announce before the (possibly hours-long) solve so a silent CPU
         # fallback is visible in the notebook output immediately.
         print(f"[sph] solver: {solver.name} ({diagnostics['solver_device'].upper()}); "
-              f"DUALSPHYSICS_DEVICE={device}")
+              f"DUALSPHYSICS_DEVICE={device}; timemax={horizon:g} s simulated")
         if use_gpu and shutil.which("nvidia-smi") is None:
             print("[sph] WARNING: GPU forced but nvidia-smi not found; "
                   "solver will fail if no CUDA device is present")
