@@ -31,41 +31,24 @@ def init_ee(project: str | None = None) -> None:
 
 def s1_median(aoi, start: str, end: str):
     """Median VV mosaic over the AOI in the given date window [dB]."""
-    ee = _require_ee()
-    return (
-        ee.ImageCollection("COPERNICUS/S1_GRD")
-        .filterBounds(aoi)
-        .filterDate(start, end)
-        .filter(ee.Filter.eq("instrumentMode", "IW"))
-        .filter(ee.Filter.listContains("transmitterReceiverPolarisation", "VV"))
-        .select("VV")
-        .median()
-        .focal_median(50, "circle", "meters")
-    )
+    from ..nrt import flood_map as fm
+    return fm.s1_composite(aoi, start, end)[0]
 
 
 def flood_mask(aoi, before: tuple[str, str], after: tuple[str, str],
                drop_db: float = -3.0, after_max_db: float = -15.0):
     """Flooded-area mask (unmasked where valid), excluding permanent water
-    and slopes over 5 degrees. ``before``/``after`` are (start, end) dates."""
-    ee = _require_ee()
-    pre = s1_median(aoi, *before)
-    post = s1_median(aoi, *after)
-    change = post.subtract(pre)
-    flood = change.lt(drop_db).And(post.lt(after_max_db))
-    permanent = (
-        ee.Image("JRC/GSW1_4/GlobalSurfaceWater")
-        .select("occurrence")
-        .gt(80)
-    )
-    dem = ee.Image("COPERNICUS/DEM/GLO30").select("DEM").mosaic()
-    slope = ee.Terrain.slope(dem)
-    return (
-        flood.updateMask(permanent.Not())
-        .updateMask(slope.lt(5))
-        .selfMask()
-        .rename("flood")
-    )
+    and slopes over 5 degrees. ``before``/``after`` are (start, end) dates.
+
+    Single-AOI convenience wrapper; the detection core lives in
+    ``dam_break.nrt.flood_map`` (shared with the automated watchlist).
+    """
+    from ..nrt import flood_map as fm
+
+    flood01, _, _, _ = fm.detect_flood(
+        aoi, after[0], after[1], before[0], before[1],
+        change_db=drop_db, water_db=after_max_db, slope_max_deg=5.0)
+    return flood01.selfMask().rename("flood")
 
 
 def flood_area_km2(mask, aoi) -> float:

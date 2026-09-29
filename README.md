@@ -159,5 +159,7 @@ python scripts/make_colab_notebook.py   # regenerate the Colab notebook
 4. ◐ Solver comparison (CSI/POD/FAR + depth bias + overlap maps) and
    depth-damage loss machinery done; physics reconciliation across solvers
    (consistent near-field volume, finer dp) pending
-5. ⏳ GEE near-real-time watchlist (scheduled Sentinel-1 re-checks)
+5. ◐ GEE near-real-time watchlist: `dam_break.nrt.run_watchlist` sweeps the
+   dam registry with Sentinel-1 change detection (UN-SPIDER practice),
+   alert rule + KML/GPKG flood exports; scheduled re-runs pending
 6. ⏳ Dashboard polish: results map with time slider, scenario library, PDF report

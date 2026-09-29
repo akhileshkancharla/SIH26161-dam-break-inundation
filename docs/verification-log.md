@@ -127,3 +127,18 @@ crawl coincided with the zombie GPU solver burning ~166% CPU).
   extent/arrival narrative, not depth accuracy.
 - SPH depth raster: 158x300 cells, values quantised in 4 m steps, wet
   0.224 km2, max 32 m (splash), bulk 12-16 m near the dam.
+
+## Milestone 5 — NRT watchlist (2026-09-29)
+
+`dam_break.nrt` implements the guide's Section 7 (UN-SPIDER Sentinel-1
+practice) as an automated dam-registry sweep: rolling before/after VV
+median composites (50 m focal-median despeckle), flood = (after-before <
+-3 dB) AND (after < -15 dB), JRC GSW occurrence>80 excluded, GLO-30
+slope>5 deg excluded (configurable — pass None for steep Himalayan
+valleys), server-side area stats (one getInfo), reduceToVectors polygons
+sieved at 5 ha, alert rule flood >= 25 km2, outputs watchlist.csv +
+alerts.json + per-dam KML/GPKG. `satellite.gee_flood` (the manual
+single-AOI South Lhonak demo) now delegates to the same core. Thresholds
+are guide defaults and need per-site tuning; revisit is days, not live.
+GEE-side code is NOT covered by local tests (no ee in CI) — first live
+run pending in Colab.

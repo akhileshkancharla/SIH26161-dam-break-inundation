@@ -201,11 +201,12 @@ code("""# One-time authentication (follow the link), then initialize
 import ee
 from dam_break.satellite import init_ee, flood_mask, flood_area_km2
 
+PROJECT = 'tpu-access-492707'
 try:
-    ee.Initialize(project='your-ee-project-id')   # <- set your Cloud project id
+    ee.Initialize(project=PROJECT)
 except Exception:
     ee.Authenticate()
-    ee.Initialize(project='your-ee-project-id')
+    ee.Initialize(project=PROJECT)
 
 aoi = ee.Geometry.Rectangle([88.10, 27.25, 88.80, 27.95])  # Teesta below the lake
 mask = flood_mask(
@@ -228,6 +229,38 @@ Map.addLayer(before, {'min': -25, 'max': 5}, 'S1 VV before')
 Map.addLayer(after, {'min': -25, 'max': 5}, 'S1 VV after')
 Map.addLayer(mask.selfMask(), {'palette': ['red']}, 'flood')
 Map""")
+
+md("""## Milestone 5 - dam watchlist: automated NRT sweep
+
+`dam_break.nrt.run_watchlist` automates Optional A over the whole dam
+registry: rolling before/after windows, JRC permanent-water and slope
+masks, server-side area stats, alert rule (flood >= 25 km2), and per-dam
+flood KML/GPKG exports. Re-run it on a schedule (cron / Cloud Scheduler)
+for the near-real-time loop — Sentinel-1 revisit is days, not live.""")
+
+code("""# 1) Sweep a 3-dam subset first (~1 min; full registry ~5 min)
+from dam_break.nrt import run_watchlist
+import pandas as pd
+from IPython.display import display
+
+nrt = run_watchlist(dam_ids=['Machhu-II', 'Tehri', 'South Lhonak Lake'],
+                    aoi_km=40, alert_km2=25.0,
+                    slope_max_deg=None)  # None: keep steep Himalayan valleys
+
+display(pd.DataFrame(nrt['rows'])[[
+    'dam', 'state', 'latest_scene', 'after_scenes', 'before_scenes',
+    'water_km2', 'perm_km2', 'flood_km2', 'status', 'notes']])
+print('alerts:', [a['dam'] for a in nrt['alerts']] or 'none')""")
+
+code("""# 2) Download the report + any flood polygons (click Allow if asked)
+from google.colab import files
+from pathlib import Path
+
+nrt_dir = Path(nrt['out_dir'])
+files.download(str(nrt_dir / 'watchlist.csv'))
+files.download(str(nrt_dir / 'alerts.json'))
+for f in nrt_dir.glob('flood_*.kml'):
+    files.download(str(f))""")
 
 md("""## Optional B — DualSPHysics near-field simulation on the T4 GPU
 
