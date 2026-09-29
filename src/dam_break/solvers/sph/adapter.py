@@ -294,7 +294,8 @@ def run_solver(case_dir: Path, name: str, solver: Path, gpu: int | None = None,
     assert proc.stdout is not None
     for line in proc.stdout:
         lines.append(line)
-        if any(k in line for k in ("Part ", "TOTAL", "ERROR", "Time ")):
+        if any(k in line for k in ("Part ", "TOTAL", "ERROR", "error", "Error",
+                                   "Time ", "Exception", "cannot allocate")):
             print(f"    {line.rstrip()[:110]}", flush=True)
     proc.wait()
     timer.cancel()
