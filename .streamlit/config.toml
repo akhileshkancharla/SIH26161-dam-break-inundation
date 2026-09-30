@@ -1,10 +1,13 @@
 [theme]
 base = "dark"
-primaryColor = "#0284C7"
-backgroundColor = "#0B0F19"
-secondaryBackgroundColor = "#111827"
-textColor = "#E2E8F0"
-font = "sans serif"
+primaryColor = "#6FD0E4"
+backgroundColor = "#0D1417"
+secondaryBackgroundColor = "#131C21"
+textColor = "#E4EBEE"
+borderColor = "#26343C"
+font = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+baseRadius = "8px"
 
 [server]
 headless = true

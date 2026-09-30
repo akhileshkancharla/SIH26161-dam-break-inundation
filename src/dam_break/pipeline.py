@@ -183,6 +183,7 @@ def run_pipeline(scenario: Scenario | str | Path | dict, out_root: str | Path | 
             )
         elif solver == "dualsphysics":
             from .solvers.sph.adapter import run_sph
+            log("running DualSPHysics (SPH near-field)")
             results[solver] = run_sph(
                 dem, dam_rc, breach, run_dir,
                 dp=scenario.run.sph_dp_m,
@@ -192,6 +193,7 @@ def run_pipeline(scenario: Scenario | str | Path | dict, out_root: str | Path | 
             log(f"  note: {note}")
 
     # --- outputs ---------------------------------------------------------------
+    log("writing rasters, polygons and exports")
     exports_written: dict[str, dict[str, str]] = {}
     summaries: dict[str, Any] = {}
     for name, res in results.items():
@@ -269,6 +271,7 @@ def run_pipeline(scenario: Scenario | str | Path | dict, out_root: str | Path | 
     # --- exposure ----------------------------------------------------------------
     exposure = None
     if landcover is not None and "screening" in results:
+        log("computing exposure and loss")
         from .exposure import exposure_from_landcover, zonal_depth_by_class
         depth = results["screening"].layers["depth_max"].array
         exposure = {

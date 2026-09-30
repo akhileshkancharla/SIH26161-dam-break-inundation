@@ -28,11 +28,22 @@ The notebook clones the repo, installs the package, runs the pipeline on a
 demo dam, exports SHP/KML, and has optional GEE flood-mapping and
 DualSPHysics (GPU) sections.
 
-Dashboard (Streamlit shell over the same pipeline):
+Dashboard (Streamlit, five steps over the same pipeline):
 
 ```bash
+pip install -e ".[dashboard]"
 streamlit run dashboard/app.py
 ```
+
+1. **Start**: replay a preset, pick a registry dam, import a scenario JSON, or
+   reopen any past run (history is read from `outputs/`).
+2. **Scenario**: dam, breach, corridor and solvers, with a live breach
+   hydrograph preview (no run needed).
+3. **Run**: the pipeline runs in the background; stages, progress and log
+   update live, and the run keeps going if you leave the page.
+4. **Results**: map-first view of depth / arrival / velocity / hazard, area
+   per depth class, and a flood-arrival time slider.
+5. **Export**: files grouped by audience, one zip with a caveats sheet.
 
 ## What a run does
 
@@ -100,7 +111,7 @@ src/dam_break/
   pipeline.py      end-to-end orchestration
 scripts/run_pipeline.py           CLI entry point
 notebooks/01_run_pipeline_colab.ipynb   Colab training/run notebook
-dashboard/app.py                  Streamlit GUI shell
+dashboard/app.py                  Streamlit entry point (app in src/dam_break/dashboard/)
 tests/                            pytest suite (offline)
 ```
 

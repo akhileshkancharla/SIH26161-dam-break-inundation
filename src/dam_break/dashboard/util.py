@@ -41,30 +41,96 @@ def depth_png_bytes(depth: np.ndarray, transform, crs,
     system's hydro ramp (cyan shallow -> magenta-crimson extreme) as
     discrete depth classes.
     """
+    png, bounds, _ = layer_png_bytes(depth, transform, crs, "depth", max_px=max_px)
+    return png, bounds
+
+
+# Map layers the results page can show: discrete classes or a continuous ramp.
+DEPTH_LABELS = ["0.1–0.5 m", "0.5–1.5 m", "1.5–3 m", "3–6 m", "over 6 m"]
+ARRIVAL_COLORS = ["#F43F5E", "#FB923C", "#FACC15", "#A3E635", "#38BDF8"]
+VELOCITY_COLORS = ["#7DD3FC", "#FACC15", "#F97316", "#DC2626"]
+HAZARD_COLORS = ["#FACC15", "#F97316", "#DC2626"]
+HAZARD_LABELS = ["low", "medium", "high"]
+LAYER_TITLES = {"depth": "Maximum depth (m)", "arrival": "Arrival time (min after breach)",
+                "velocity": "Maximum velocity (m/s)", "hazard": "Hazard class"}
+
+
+def _ramp(values: np.ndarray, colors: list[str], vmin: float, vmax: float) -> np.ndarray:
+    from matplotlib.colors import LinearSegmentedColormap
+    cmap = LinearSegmentedColormap.from_list("ramp", colors)
+    span = max(vmax - vmin, 1e-9)
+    return cmap(np.clip((values - vmin) / span, 0.0, 1.0))
+
+
+def layer_rgba(arr: np.ndarray, kind: str,
+               mask: np.ndarray | None = None) -> tuple[np.ndarray, dict]:
+    """RGBA (floats 0-1) for a result layer, plus a legend description.
+
+    kind: depth | arrival | velocity | hazard. Cells that are NaN, dry
+    (<= 0; hazard class 0) or outside ``mask`` are transparent.
+    """
     import matplotlib
     matplotlib.use("Agg")
-    from matplotlib.colors import BoundaryNorm, ListedColormap
+    from matplotlib.colors import to_rgba
 
-    d = np.asarray(depth, dtype=float)
-    wet = np.nan_to_num(d, nan=0.0) > 0
-    vmax = float(np.nanmax(d)) if wet.any() else 1.0
-    edges = [0.1, 0.5, 1.5, 3.0, 6.0]
-    if vmax <= edges[-1]:
-        edges = [e for e in edges if e < vmax] + [vmax]
-    if len(edges) < 2:
-        edges = [0.0, max(vmax, 0.1)]
-    cmap = ListedColormap(HYDRO_COLORS[:len(edges) - 1])
-    norm = BoundaryNorm(edges, cmap.N, clip=True)
-    rgba = cmap(norm(np.nan_to_num(d, nan=0.0)))
-    rgba[..., 3] = np.where(wet, 235, 0)
+    a = np.asarray(arr, dtype=float)
+    finite = np.isfinite(a)
+    vals = np.where(finite, a, 0.0)
+    if kind == "depth":
+        show = vals > HYDRO_EDGES[0]   # same wet threshold as the solvers' area figures
+        idx = np.clip(np.digitize(vals, HYDRO_EDGES[1:-1]), 0, len(HYDRO_COLORS) - 1)
+        rgba = np.array([to_rgba(c) for c in HYDRO_COLORS])[idx]
+        legend = {"type": "classes", "colors": HYDRO_COLORS, "labels": DEPTH_LABELS}
+    elif kind == "hazard":
+        show = vals >= 1
+        idx = np.clip(vals.astype(int) - 1, 0, 2)
+        rgba = np.array([to_rgba(c) for c in HAZARD_COLORS])[idx]
+        legend = {"type": "classes", "colors": HAZARD_COLORS, "labels": HAZARD_LABELS}
+    else:
+        show = finite & ((vals > 0) if kind == "velocity" else np.ones_like(finite))
+        colors = ARRIVAL_COLORS if kind == "arrival" else VELOCITY_COLORS
+        data = vals[show]
+        vmin = float(data.min()) if data.size else 0.0
+        vmax = float(np.percentile(data, 99)) if data.size else 1.0
+        if kind == "arrival" and data.size:
+            vmax = float(data.max())
+        rgba = _ramp(vals, colors, vmin, vmax)
+        legend = {"type": "ramp", "colors": colors, "vmin": vmin, "vmax": vmax}
+    show = show & finite
+    if mask is not None:
+        show = show & mask
+    rgba[..., 3] = np.where(show, 0.92, 0.0)
+    legend["title"] = LAYER_TITLES.get(kind, kind)
+    return rgba, legend
 
-    h, w = d.shape
-    scale = max(1, int(np.ceil(max(w, h) / max_px)))
-    rgb = rgba[::scale, ::scale]
+
+def layer_png_bytes(arr: np.ndarray, transform, crs, kind: str,
+                    mask: np.ndarray | None = None, max_px: int = 1400
+                    ) -> tuple[bytes, tuple[float, float, float, float], dict]:
+    """PNG overlay (transparent where dry), WGS84 bounds and legend for a layer."""
     from PIL import Image
+
+    rgba, legend = layer_rgba(arr, kind, mask)
+    h, w = rgba.shape[:2]
+    scale = max(1, int(np.ceil(max(w, h) / max_px)))
+    img = (rgba[::scale, ::scale] * 255).round().astype(np.uint8)
     buf = io.BytesIO()
-    Image.fromarray((rgb * 255).astype(np.uint8)).save(buf, format="PNG")
-    return buf.getvalue(), wgs84_bounds(d.shape, transform, crs)
+    Image.fromarray(img).save(buf, format="PNG")
+    return buf.getvalue(), wgs84_bounds(np.shape(arr), transform, crs), legend
+
+
+def depth_class_areas(depth: np.ndarray, cell_area_m2: float,
+                      mask: np.ndarray | None = None) -> list[dict]:
+    """Flooded area (ha) per map depth class (cells deeper than 0.1 m, as in the
+    solver diagnostics), matching the map colours."""
+    d = np.nan_to_num(np.asarray(depth, dtype=float), nan=0.0)
+    wet = d > HYDRO_EDGES[0]
+    if mask is not None:
+        wet &= mask
+    idx = np.clip(np.digitize(d[wet], HYDRO_EDGES[1:-1]), 0, len(HYDRO_COLORS) - 1)
+    counts = np.bincount(idx, minlength=len(HYDRO_COLORS))
+    return [{"label": lab, "color": col, "area_ha": float(n * cell_area_m2 / 1e4)}
+            for lab, col, n in zip(DEPTH_LABELS, HYDRO_COLORS, counts)]
 
 
 def kpi_stats(run_dir: str | Path) -> dict:
