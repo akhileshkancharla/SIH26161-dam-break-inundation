@@ -189,3 +189,24 @@ check pending on the user's machine. Install: pip install ".[dashboard]";
 run: streamlit run src/dam_break/dashboard/app.py. FastAPI job-runner
 backend (guide 10.2/10.5) deliberately deferred — the library already
 separates compute from UI.
+
+## Dashboard redesign — "HydroInundate Operations" (2026-09-30)
+
+Restyled per the team's Stitch design system: dark hydrographic
+command-center theme (.streamlit/config.toml base + injected CSS in
+dashboard/theme.py — Space Grotesk / Inter / JetBrains Mono, hydro-blue
+#0284C7 primary, cyan #38BDF8 telemetry, hazard green/amber/red accents).
+New layout: mission-control crisis header strip, 4 KPI metric cards with
+accent borders (peak depth, Qp, inundation footprint, wave-front arrival
+at corridor end — all computed from the run's depth/velocity/arrival
+rasters via util.kpi_stats), sidebar solver-status chips
+(screening/delft3d/dualsphysics active-ready-standby from tool presence),
+tabs restyled as segmented controls. Map: CARTO dark basemap default with
+street/satellite toggles, depth overlay re-coloured to the design's
+hydro ramp (0-0.5 cyan / 0.5-1.5 blue / 1.5-3 amber / 3-6 red / >6
+magenta via BoundaryNorm) plus a branca step legend on the map. New
+Breach-hydrograph tab: real Q(t) from the breach module rendered dark
+(tf marker, Qp threshold line). NRT tab shows severity chips per dam.
+Note: local venv now uses `pip install -e .` — the stale-site-packages
+copy had been shadowing src/ in tests (local twin of the Colab
+module-cache trap). 63 tests; AppTest 0 exceptions.

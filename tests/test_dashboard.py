@@ -76,3 +76,53 @@ class TestArtifacts:
 
     def test_missing_dir_is_empty(self, tmp_path):
         assert list_run_artifacts(tmp_path / "nope") == {}
+
+
+class TestHydroRamp:
+    def test_shallow_raster_uses_single_class(self):
+        tr = Affine(0.01, 0, 0.0, 0, -0.01, 1.0)
+        depth = np.zeros((10, 10)); depth[2:5, 2:5] = 0.3   # all < 0.5 m
+        png, _ = depth_png_bytes(depth, tr, "EPSG:4326")
+        assert png[:4] == b"\x89PNG"
+
+    def test_deep_raster_renders(self):
+        tr = Affine(0.01, 0, 0.0, 0, -0.01, 1.0)
+        depth = np.zeros((10, 10)); depth[2:5, 2:5] = 7.9   # > 6 m class
+        png, _ = depth_png_bytes(depth, tr, "EPSG:4326")
+        assert png[:4] == b"\x89PNG"
+
+
+class TestKpiStats:
+    def test_reads_run_rasters(self, tmp_path):
+        import rasterio
+        from dam_break.dashboard.util import kpi_stats
+        sdir = tmp_path / "screening"; sdir.mkdir()
+        depth = np.zeros((50, 50)); depth[10:20, 10:20] = 3.5
+        vel = np.zeros((50, 50)); vel[12, 12] = 5.5
+        arr = np.full((50, 50), np.nan)
+        arr[10:20, 10:20] = 40
+        arr[15:20, 10:20] = 90   # front reaches the far cells later
+        prof = {"driver": "GTiff", "height": 50, "width": 50, "count": 1,
+                "dtype": "float32", "transform": Affine(60, 0, 0, 0, -60, 0),
+                "nodata": float("nan")}
+        for name, data in (("depth_max.tif", depth), ("velocity_max.tif", vel),
+                           ("arrival_min.tif", arr)):
+            with rasterio.open(sdir / name, "w", **prof) as ds:
+                ds.write(data.astype("float32"), 1)
+        k = kpi_stats(tmp_path)
+        assert abs(k["peak_depth_m"] - 3.5) < 1e-5
+        assert k["wet_area_km2"] == 100 * 3600 / 1e6
+        assert k["max_velocity_ms"] == pytest.approx(5.5, abs=1e-4)
+        assert k["arrival_front_min"] == 90
+        assert k["arrival_dam_min"] == 40
+
+
+class TestHydrographFigure:
+    def test_figure_renders_with_markers(self):
+        import matplotlib.pyplot as plt
+        from dam_break.dashboard.util import hydrograph_figure
+        t = np.linspace(0, 3600 * 12, 200)
+        q = 8000 * np.exp(-t / 9000); q[t < 3600] *= t[t < 3600] / 3600
+        fig = hydrograph_figure(t, q, failure_time_s=3600, peak_flow_m3s=8000)
+        assert len(fig.axes) == 1
+        plt.close(fig)
