@@ -102,18 +102,25 @@ def detect_flood(aoi, after_start: str, after_end: str,
 
 
 def area_stats(flood01, water01, perm01, aoi, scale_m: float = 100):
-    """km2 areas of flood / all surface water / permanent water (one call)."""
+    """km2 areas of flood / all surface water / permanent water.
+
+    Three independent single-band sums (the pattern validated live on the
+    Tehri AOI) fetched in one round-trip — a single stacked multiband
+    reduceRegion silently returned zeros for all bands on the same inputs.
+    """
     ee = _ee()
-    area = ee.Image.pixelArea()
-    stacked = (
-        area.multiply(flood01.rename("flood"))
-        .addBands(area.multiply(water01.rename("water")))
-        .addBands(area.multiply(perm01.rename("perm")))
-    )
-    res = stacked.reduceRegion(
-        ee.Reducer.sum(), aoi, scale=scale_m, maxPixels=1e10
-    ).getInfo()
-    return {k: float(v or 0.0) / 1e6 for k, v in res.items()}
+
+    def _sum_m2(mask, name):
+        img = ee.Image.pixelArea().multiply(mask).rename(name)
+        return img.reduceRegion(
+            ee.Reducer.sum(), aoi, scale=scale_m, maxPixels=1e10).get(name)
+
+    combined = ee.Dictionary({
+        "flood": _sum_m2(flood01, "flood"),
+        "water": _sum_m2(water01, "water"),
+        "perm": _sum_m2(perm01, "perm"),
+    }).getInfo()
+    return {k: float(v or 0.0) / 1e6 for k, v in combined.items()}
 
 
 def flood_vectors(flood01, aoi, scale_m: float = 100, max_features: int = 5000):
