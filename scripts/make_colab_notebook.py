@@ -201,7 +201,7 @@ code("""# One-time authentication (follow the link), then initialize
 import ee
 from dam_break.satellite import init_ee, flood_mask, flood_area_km2
 
-PROJECT = 'tpu-access-492707'
+PROJECT = 'colab-520546   # your EE-registered Cloud project (was tpu-access-492807)'
 try:
     ee.Initialize(project=PROJECT)
 except Exception:

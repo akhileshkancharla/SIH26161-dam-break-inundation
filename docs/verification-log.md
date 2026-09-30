@@ -142,3 +142,29 @@ single-AOI South Lhonak demo) now delegates to the same core. Thresholds
 are guide defaults and need per-site tuning; revisit is days, not live.
 GEE-side code is NOT covered by local tests (no ee in CI) — first live
 run pending in Colab.
+
+## Milestone 5 — first live watchlist run (2026-09-30, run 20260930T054751Z)
+
+Validated end-to-end on 3 dams after two GEE gotchas: (1) the user's
+original project `tpu-access-492807` began returning USER_PROJECT_DENIED
+("not found or deleted") — fixed by registering a fresh Cloud project for
+Earth Engine; (2) a stacked 3-band `reduceRegion` silently returned zeros
+for every band on inputs where three single-band reduces returned correct
+values — `area_stats` now does three independent single-band sums in one
+`ee.Dictionary` round-trip. Reminder re-learned: after `git pull`, a
+Colab kernel keeps the OLD module cached — restart the session before
+re-running.
+
+Results (aoi 40x40 km, change -3 dB / water -15 dB, slope mask OFF):
+- South Lhonak: water 1348 km2 (!), perm 21.5, flood 2.0 (4 polygons).
+  The huge "water" is over-detection: glacier ice and smooth high-valley
+  surfaces are dark in VV, and disabling the slope mask (needed to keep
+  steep terrain) admits layover/shadow — documented SAR caveats, live.
+- Machhu-II: water 310, perm 29.3, flood 47.0 -> ALERT (>= 25 km2),
+  125 polygons. Post-monsoon Gujarat: paddy fields and full tanks read
+  like water - a textbook threshold-tuning example, not an error.
+- Tehri: water 227, perm 7.8, flood 6.9 (30 polygons). Reservoir +
+  rivers; the small perm is real (GSW occurrence>80 only counts the
+  deepest persistent part of a reservoir filled gradually since 2005).
+Status: machinery validated; dB thresholds are demo defaults, tuning
+per site remains future work.
