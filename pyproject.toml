@@ -27,6 +27,7 @@ dependencies = [
 gee = ["earthengine-api"]
 delft3d = ["hydrolib-core", "meshkernel"]
 sph = ["numpy-stl"]
+dashboard = ["streamlit", "folium", "matplotlib"]
 dev = ["pytest"]
 
 [tool.setuptools.packages.find]

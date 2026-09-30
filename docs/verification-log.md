@@ -168,3 +168,24 @@ Results (aoi 40x40 km, change -3 dB / water -15 dB, slope mask OFF):
   deepest persistent part of a reservoir filled gradually since 2005).
 Status: machinery validated; dB thresholds are demo defaults, tuning
 per site remains future work.
+
+## Milestone 6 — Streamlit dashboard (2026-09-30)
+
+`src/dam_break/dashboard/` (app.py + util.py), per guide Section 10's
+Streamlit recommendation: sidebar scenario editor (registry dam picker,
+breach mode/case, terrain, solver selection — writes/reads the same
+scenario JSON schema everything else uses), one-click pipeline run,
+and tabs for Overview (Qp/tf/volume/loss metrics), Results map (folium:
+transparent depth-raster overlay + depth-class polygons + dam marker),
+Impact & loss (loss.csv + crore total), Comparison (JSON + overlap PNG),
+NRT watchlist browser (any outputs/nrt sweep + alerts), and Exports
+(download buttons for every artifact, incl. .shp zips and .kml).
+Helpers (WGS84 bounds reprojection, transparent depth PNG, registry->
+scenario dict, artifact listing) are unit-tested (10 tests; 59 total).
+App-level smoke test: streamlit headless boot (HTTP 200) +
+streamlit.testing AppTest — 0 exceptions, 6 tabs, sidebar wired. The
+map/loss tabs execute only after an interactive run — first visual
+check pending on the user's machine. Install: pip install ".[dashboard]";
+run: streamlit run src/dam_break/dashboard/app.py. FastAPI job-runner
+backend (guide 10.2/10.5) deliberately deferred — the library already
+separates compute from UI.
